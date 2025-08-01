@@ -22,7 +22,7 @@ public class LogInjector {
 
         String androidPlatforms = args[0]; // e.g., /path/to/android-sdk/platforms
         String apkPath = args[1];          // e.g., /path/to/your/app.apk
-
+        System.out.println ("apkPATH:"+apkPath);
         // Initialize Soot
         setupSoot(androidPlatforms, apkPath);
 
