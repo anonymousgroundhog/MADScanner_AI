@@ -50,15 +50,15 @@ public class LogInjector {
      * @param apkPath          Path to the input APK file.
      */
     private static void setupSoot(String androidPlatforms, String apkPath) {
-        // Reset Soot settings (important for running Soot multiple times)
+        // Reset Soot settings (important for running Soot multiple times in a single JVM instance)
         G.reset();
 
         // Set Soot options for Android processing
-        Options.v().set_allow_phantom_refs(true); // Allow unresolved classes/methods
-        Options.v().set_prepend_classpath(true);  // Prepend the default classpath
-        Options.v().set_validate(false);           // Validate Jimple bodies
-    	Options.v().set_process_multiple_dex(true);
-    	Options.v().set_num_threads(1);
+        Options.v().set_allow_phantom_refs(true); // Allow unresolved classes/methods, prevents crashes from missing dependencies
+        Options.v().set_prepend_classpath(true);  // Prepend the default classpath, useful for resolving core Java classes
+        Options.v().set_validate(false);           // Disable Jimple body validation (can sometimes cause issues with complex transformations)
+        Options.v().set_process_multiple_dex(true); // Enable processing of multi-dex APKs
+        Options.v().set_num_threads(1);             // Limit Soot to a single thread for stability and lower memory spikes
 
         // Specify the input format as APK
         Options.v().set_src_prec(Options.src_prec_apk);
@@ -66,20 +66,41 @@ public class LogInjector {
         // Specify the output format as Dalvik bytecode (dex)
         Options.v().set_output_format(Options.output_format_dex);
 
-        // Set the Android platforms directory (required for resolving Android framework classes)
-        // Soot will use this path to find the necessary android.jar
+        // Set the Android platforms directory (required for resolving Android framework classes like android.util.Log)
         Options.v().set_android_jars(androidPlatforms);
 
-        // Specify the input APK file
-    	java.util.List<String> processDirList = new java.util.ArrayList<>();
-    	processDirList.add(apkPath);
-    	Options.v().set_process_dir(processDirList);
-        // REMOVED: Options.v().set_force_android_jar(true); // This line caused the error
+        // Specify the input APK file for processing
+        java.util.List<String> processDirList = new java.util.ArrayList<>();
+        processDirList.add(apkPath);
+        Options.v().set_process_dir(processDirList);
 
-        // Set the output directory
+        // These options are crucial for handling complex APKs and internal typing errors.
+        Options.v().set_full_resolver(true); // Attempts a more comprehensive and robust type resolution
+        Options.v().set_no_bodies_for_excluded(true); // Prevents building Jimple bodies for classes excluded from analysis, saving memory and avoiding issues in those bodies.
+        // Options.v().set_allow_jimple_construction(true); // <--- THIS LINE IS NOW COMMENTED OUT
+        // This option might not exist in older Soot versions or its functionality might be handled differently.
+        // If you encounter 'cannot find symbol' for this line, keep it commented out.
+        // Update Soot to a recent version to potentially gain access to or automatically handle this functionality.
+
+        // --- IMPORTANT: Uncomment and adjust this line AFTER updating your Soot JARs ---
+        // This explicitly tells Soot the target Android API level. A mismatch here is a common
+        // cause of type resolution issues during Dex printing.
+        // Try a common recent API level like 30 or 31 if unsure.
+        // E.g., Options.v().set_android_targets_api_level(30);
+        // E.g., Options.v().set_android_targets_api_level(31);
+        // The error you got ("cannot find symbol") means your current Soot version doesn't
+        // have this method. Update Soot, then uncomment this line.
+        // Options.v().set_android_targets_api_level(34); // Keep this line commented until Soot is updated
+
+        // Optional: If issues still persist, consider this. It tells Soot to ignore some
+        // resolution errors, but can potentially hide real problems. Use with caution.
+        // Options.v().set_ignore_resolution_errors(true);
+
+        // Set the output directory for the instrumented APK
         Options.v().set_output_dir("sootOutput");
 
-        // Load necessary classes (including Android Log class)
+        // Load necessary classes from the classpath and Android JARs.
+        // This step is critical for Soot to understand the structure of the application.
         Scene.v().loadNecessaryClasses();
     }
     /**
@@ -143,11 +164,5 @@ public class LogInjector {
 
              units.insertBefore(logStmt, insertionPoint);
         }
-
-
-        // Validate the modified body (optional but recommended)
-        //jimpleBody.validate();
-
-        // System.out.println("Injected log into: " + methodSignature); // Optional: Print confirmation
     }
 }

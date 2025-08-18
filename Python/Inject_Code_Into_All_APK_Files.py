@@ -136,7 +136,7 @@ def main():
                     # Set CWD for the Java command to `soot_global_output_base_dir`.
                     # LogInjector's output (e.g., base.apk) will then appear in `soot_global_output_base_dir/sootOutput/`.
                     run_command(
-                        ["java", "-Xmx20g", 
+                        ["java", "-Xmx25g", 
                          "-cp", f"{parent_dir}:" + os.path.join(parent_dir, "Jar_Libs", "*"), # .class and Jar_Libs are one directory up
                          "LogInjector", 
                          os.path.join(parent_dir, "Android", "platforms"), # Android/platforms is one directory up
