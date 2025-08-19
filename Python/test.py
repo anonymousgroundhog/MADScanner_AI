@@ -410,13 +410,27 @@ def main():
             print("\n  Test finished for this app. Quitting driver.")
             if driver:
                 driver.quit()
+
+            # --- Uninstall the app from the device ---
+            print(f"  Attempting to uninstall {app_package} from the device...")
+            try:
+                # Use 'adb uninstall' to remove the app by its package name
+                stdout, stderr = run_command(
+                    ["adb", "uninstall", app_package],
+                    check_output=True, # Raise an error if uninstall fails
+                    error_message=f"Error uninstalling {app_package}"
+                )
+                print(f"  ✅ Successfully uninstalled {app_package}.")
+                # print(f"    ADB uninstall stdout: {stdout}") # Uncomment for verbose ADB output
+            except Exception as e:
+                print(f"  ❌ Failed to uninstall {app_package}: {e}", file=sys.stderr)
     
     if processed_app_count == 0:
         print("\n😔 No instrumented applications were found in 'Soot_Output_Injector_APK_Files' to test.")
         print("Please ensure your APK processing script successfully generated signed APKs in that directory.")
     else:
         print(f"\n--- Completed Automated Ad-Clicking Test for {processed_app_count} application(s). ---")
-    print("Ensure your Android emulator/device is running and Appium server is started (e.g., 'appium -p 4723').")
+    
 
 
 if __name__ == "__main__":
