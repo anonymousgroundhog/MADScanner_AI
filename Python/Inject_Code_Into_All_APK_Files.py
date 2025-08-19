@@ -60,7 +60,7 @@ def main():
     final_output_dir = os.path.join(script_dir, "Soot_Output_Injector_APK_Files")
 
     # Define the global intermediate Soot output directory.
-    # This is the base for package-specific soot output subdirectories.
+    # This is the base for -specific soot output subdirectories.
     soot_global_output_base_dir = os.path.join(parent_dir, "sootOutput")
 
     print("--- Starting APK LogInjector Automation ---")
@@ -103,28 +103,28 @@ def main():
         print(f"❌ Initial setup or compilation failed: {e}", file=sys.stderr)
         sys.exit(1) # Exit if setup fails, as subsequent steps depend on it.
 
-    # 2. Iterate over package subdirectories and run LogInjector for each 'base.apk'
+    # 2. Iterate over  subdirectories and run LogInjector for each 'base.apk'
     processed_apks_count = 0
     if not os.path.isdir(apk_files_base_dir):
         print(f"⚠️ Directory '{os.path.abspath(apk_files_base_dir)}' not found. "
               "Please ensure it exists and contains APK subfolders.", file=sys.stderr)
         sys.exit(1) # Exit if the base APK directory doesn't exist.
 
-    for package_dir_name in os.listdir(apk_files_base_dir):
-        package_full_path = os.path.join(apk_files_base_dir, package_dir_name)
+    for _dir_name in os.listdir(apk_files_base_dir):
+        _full_path = os.path.join(apk_files_base_dir, _dir_name)
         
-        if os.path.isdir(package_full_path):
-            base_apk_input_path = os.path.join(package_full_path, "base.apk")
+        if os.path.isdir(_full_path):
+            base_apk_input_path = os.path.join(_full_path, "base.apk")
             
             if os.path.isfile(base_apk_input_path):
-                print(f"\n--- Processing '{package_dir_name}' ---")
+                print(f"\n--- Processing '{_dir_name}' ---")
                 print(f"Found input base.apk: {base_apk_input_path}")
 
-                # Define the *final desired* package-specific output directory for the injected APK
-                # This is `sootOutput/<package_name>/`
-                package_specific_soot_output_dest_dir = os.path.join(soot_global_output_base_dir, package_dir_name)
-                os.makedirs(package_specific_soot_output_dest_dir, exist_ok=True)
-                print(f"  - Created package-specific final output directory in Soot: {os.path.abspath(package_specific_soot_output_dest_dir)}")
+                # Define the *final desired* -specific output directory for the injected APK
+                # This is `sootOutput/<_name>/`
+                _specific_soot_output_dest_dir = os.path.join(soot_global_output_base_dir, _dir_name)
+                os.makedirs(_specific_soot_output_dest_dir, exist_ok=True)
+                print(f"  - Created -specific final output directory in Soot: {os.path.abspath(_specific_soot_output_dest_dir)}")
                 
                 # Define the temporary directory where LogInjector will place its output.
                 # Assuming LogInjector creates its 'sootOutput' subdirectory relative to its CWD.
@@ -157,15 +157,15 @@ def main():
                             loginjector_output_apk_path = os.path.join(loginjector_temp_output_dir, found_apks_in_temp[0])
                             print(f"  - Expected 'base.apk' not found, using '{os.path.basename(loginjector_output_apk_path)}' instead.")
                         else:
-                            print(f"⚠️ LogInjector did not produce any APK in '{loginjector_temp_output_dir}'. Skipping move for this package.", file=sys.stderr)
-                            continue # Skip to next package
+                            print(f"⚠️ LogInjector did not produce any APK in '{loginjector_temp_output_dir}'. Skipping move for this .", file=sys.stderr)
+                            continue # Skip to next 
 
                     # Define the final destination path for the moved APK.
-                    # This will be `sootOutput/<package_name>/base.apk`
-                    final_moved_apk_path = os.path.join(package_specific_soot_output_dest_dir, os.path.basename(loginjector_output_apk_path))
+                    # This will be `sootOutput/<_name>/base.apk`
+                    final_moved_apk_path = os.path.join(_specific_soot_output_dest_dir, os.path.basename(loginjector_output_apk_path))
                     
-                    # Move the processed APK from the nested temporary location to the desired package-specific folder
-                    print(f"  - Moving injected APK from '{os.path.basename(loginjector_temp_output_dir)}/' to '{os.path.basename(package_specific_soot_output_dest_dir)}/'...")
+                    # Move the processed APK from the nested temporary location to the desired -specific folder
+                    print(f"  - Moving injected APK from '{os.path.basename(loginjector_temp_output_dir)}/' to '{os.path.basename(_specific_soot_output_dest_dir)}/'...")
                     shutil.move(loginjector_output_apk_path, final_moved_apk_path)
                     
                     # Clean up the temporary LogInjector output directory.
@@ -180,9 +180,9 @@ def main():
                 except Exception as e:
                     print(f"❌ Error during injection or file move for '{os.path.basename(base_apk_input_path)}': {e}", file=sys.stderr)
             else:
-                print(f"⚠️ 'base.apk' not found in '{package_full_path}'. Skipping.", file=sys.stderr)
+                print(f"⚠️ 'base.apk' not found in '{_full_path}'. Skipping.", file=sys.stderr)
         else:
-            print(f"Skipping non-directory item in {os.path.basename(apk_files_base_dir)}: {package_full_path}")
+            print(f"Skipping non-directory item in {os.path.basename(apk_files_base_dir)}: {_full_path}")
 
     if processed_apks_count == 0:
         print("\n😔 No 'base.apk' files were found and processed in the specified directory structure.")
@@ -196,22 +196,22 @@ def main():
         if not os.path.isdir(soot_global_output_base_dir) or not os.listdir(soot_global_output_base_dir):
             print("  - Global 'sootOutput' directory is empty or not found. No files to post-process.", file=sys.stderr)
         else:
-            # Iterate through each package subdirectory within the global sootOutput folder
-            for package_soot_output_sub_dir_name in os.listdir(soot_global_output_base_dir):
-                package_soot_output_sub_dir_path = os.path.join(soot_global_output_base_dir, package_soot_output_sub_dir_name)
+            # Iterate through each  subdirectory within the global sootOutput folder
+            for _soot_output_sub_dir_name in os.listdir(soot_global_output_base_dir):
+                _soot_output_sub_dir_path = os.path.join(soot_global_output_base_dir, _soot_output_sub_dir_name)
                 
-                if os.path.isdir(package_soot_output_sub_dir_path):
-                    print(f"  - Processing outputs for package: {package_soot_output_sub_dir_name}")
+                if os.path.isdir(_soot_output_sub_dir_path):
+                    print(f"  - Processing outputs for : {_soot_output_sub_dir_name}")
                     
-                    # Iterate through the files *within* this package's soot output subdirectory
-                    for item_name in os.listdir(package_soot_output_sub_dir_path):
-                        item_full_path = os.path.join(package_soot_output_sub_dir_path, item_name)
+                    # Iterate through the files *within* this 's soot output subdirectory
+                    for item_name in os.listdir(_soot_output_sub_dir_path):
+                        item_full_path = os.path.join(_soot_output_sub_dir_path, item_name)
                         
                         if os.path.isfile(item_full_path) and item_name != "Info.md":
                             filename = item_name # This will likely be "base.apk" now
                             print(f"    - Processing output file: {filename}")
                             
-                            signed_apk_path = os.path.join(package_soot_output_sub_dir_path, f"signed-{filename}") 
+                            signed_apk_path = os.path.join(_soot_output_sub_dir_path, f"signed-{filename}") 
                             
                             # Zipalign the APK
                             print(f"      - Zipaligning '{filename}'...")
@@ -240,17 +240,17 @@ def main():
                                 print(f"    - Removed {idsig_file} from script directory.")
                             
                             # Copy the final signed APK to the dedicated final output directory,
-                            # maintaining the package-specific subdirectory structure.
-                            final_package_output_dir = os.path.join(final_output_dir, package_soot_output_sub_dir_name)
-                            os.makedirs(final_package_output_dir, exist_ok=True) # Ensure package sub-dir exists in final output
+                            # maintaining the -specific subdirectory structure.
+                            final__output_dir = os.path.join(final_output_dir, _soot_output_sub_dir_name)
+                            os.makedirs(final__output_dir, exist_ok=True) # Ensure  sub-dir exists in final output
                             
-                            print(f"    - Copying 'signed-{filename}' to {os.path.basename(final_output_dir)}/{package_soot_output_sub_dir_name}/...")
-                            shutil.copy(signed_apk_path, final_package_output_dir)
+                            print(f"    - Copying 'signed-{filename}' to {os.path.basename(final_output_dir)}/{_soot_output_sub_dir_name}/...")
+                            shutil.copy(signed_apk_path, final__output_dir)
                             print(f"    - Successfully processed and copied signed '{filename}'")
                         else:
-                            print(f"  - Skipping non-APK file or Info.md in {package_soot_output_sub_dir_name}: {item_name}")
+                            print(f"  - Skipping non-APK file or Info.md in {_soot_output_sub_dir_name}: {item_name}")
                 else:
-                    print(f"Skipping non-directory item in {os.path.basename(soot_global_output_base_dir)}: {package_soot_output_sub_dir_name}")
+                    print(f"Skipping non-directory item in {os.path.basename(soot_global_output_base_dir)}: {_soot_output_sub_dir_name}")
 
             # Final cleanup of any lingering .idsig files from the main script directory after all post-processing.
             for idsig_file in [f for f in os.listdir(script_dir) if f.endswith(".idsig")]:
