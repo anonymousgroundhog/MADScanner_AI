@@ -2,7 +2,6 @@ android
 android.auto_generated_characteristics_rro
 android.auto_generated_rro_product__
 android.auto_generated_rro_vendor__
-co.brainly
 com.android.DeviceAsWebcam
 com.android.backupconfirm
 com.android.bips
@@ -243,10 +242,8 @@ com.google.android.wifi.resources
 com.google.android.youtube
 com.google.mainline.adservices
 com.google.mainline.telemetry
-com.languagelearning.tutor.speakfluently
-hacking.learnhacking.learn.hack.ethicalhacking.programming.coding.hackerx.cybersecurity
+com.mediaradiance.shotshort
+com.vizio.vue.launcher
 io.appium.settings
 io.appium.uiautomator2.server
 io.appium.uiautomator2.server.test
-plant.identification.flower.tree.leaf.identifier.identify.cat.dog.breed.nature
-woofz.dog.training.app
