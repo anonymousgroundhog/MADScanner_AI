@@ -58,7 +58,7 @@ public class LogInjector {
         Options.v().set_prepend_classpath(true);  // Prepend the default classpath, useful for resolving core Java classes
         Options.v().set_validate(false);           // Disable Jimple body validation (can sometimes cause issues with complex transformations)
         Options.v().set_process_multiple_dex(true); // Enable processing of multi-dex APKs
-        Options.v().set_num_threads(1ex);             // Limit Soot to a single thread for stability and lower memory spikes
+        Options.v().set_num_threads(1);             // Limit Soot to a single thread for stability and lower memory spikes
 
         // Specify the input format as APK
         Options.v().set_src_prec(Options.src_prec_apk);
