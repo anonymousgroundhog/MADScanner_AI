@@ -1,5 +1,5 @@
 import os
-import shutil
+import shutil, logging
 
 # --- Configuration ---
 # The path to the directory containing APKs to be cleaned up.
@@ -16,7 +16,7 @@ def cleanup_soot_output():
 
     # Check if the root directory exists.
     if not os.path.isdir(SOOT_OUTPUT_DIR):
-        print(f"Error: The directory '{SOOT_OUTPUT_DIR}' was not found.")
+        print(f"Error: The directory '{SOOT_OUTPUTD_IR}' was not found.")
         return
 
     # Get a list of immediate subdirectories to avoid errors while iterating.
@@ -53,5 +53,36 @@ def cleanup_soot_output():
 
     print("\nCleanup process complete.")
 
+def remove_base_apk():
+    """
+    Recursively searches for 'base.apk' within the directory specified by
+    SOOT_OUTPUT_DIR and removes any instances found.
+    """
+    if not os.path.isdir(SOOT_OUTPUT_DIR):
+        logging.warning(f"Directory '{SOOT_OUTPUT_DIR}' not found. Nothing to remove.")
+        return
+
+    found_and_removed = False
+    try:
+        # os.walk traverses the directory tree top-down, searching for the file.
+        for root, dirs, files in os.walk(SOOT_OUTPUT_DIR):
+            if 'base.apk' in files:
+                file_path = os.path.join(root, 'base.apk')
+                logging.info(f"Found 'base.apk' at: {file_path}")
+                try:
+                    os.remove(file_path)
+                    logging.info(f"Successfully removed {file_path}")
+                    found_and_removed = True
+                    # Continue searching in case there are multiple 'base.apk' files in other subdirectories
+                except OSError as e:
+                    logging.error(f"Error removing file {file_path}: {e}")
+
+        if not found_and_removed:
+            logging.warning(f"'base.apk' not found anywhere within {SOOT_OUTPUT_DIR}.")
+
+    except Exception as e:
+        logging.error(f"An unexpected error occurred during search: {e}")
+
 if __name__ == "__main__":
     cleanup_soot_output()
+    remove_base_apk()
