@@ -110,6 +110,8 @@ def main():
               "Please ensure it exists and contains APK subfolders.", file=sys.stderr)
         sys.exit(1) # Exit if the base APK directory doesn't exist.
 
+    file_number=0
+    number_of_files=len(os.listdir(apk_files_base_dir))
     for _dir_name in os.listdir(apk_files_base_dir):
         _full_path = os.path.join(apk_files_base_dir, _dir_name)
         
@@ -117,7 +119,8 @@ def main():
             base_apk_input_path = os.path.join(_full_path, "base.apk")
             
             if os.path.isfile(base_apk_input_path):
-                print(f"\n--- Processing '{_dir_name}' ---")
+                file_number=file_number+1
+                print(f"\n--- Processing '{_dir_name}' ( {file_number} out of {number_of_files}) ---")
                 print(f"Found input base.apk: {base_apk_input_path}")
 
                 # Define the *final desired* -specific output directory for the injected APK
