@@ -43,7 +43,7 @@ def run_command(command_parts, check_output=False, cwd=None, error_message="Erro
 
 def main():
     """
-    Main function to orchestrate the LogInjector process for all base.apk files.
+    Main function to orchestrate the LogInjector process for all APK files.
     """
     # Define the script's directory (where this Python file resides, e.g., 'your_project/Python/')
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -60,7 +60,7 @@ def main():
     final_output_dir = os.path.join(script_dir, "Soot_Output_Injector_APK_Files")
 
     # Define the global intermediate Soot output directory.
-    # This is the base for -specific soot output subdirectories.
+    # This is the base for app-specific soot output subdirectories.
     soot_global_output_base_dir = os.path.join(parent_dir, "sootOutput")
 
     print("--- Starting APK LogInjector Automation ---")
@@ -103,7 +103,7 @@ def main():
         print(f"❌ Initial setup or compilation failed: {e}", file=sys.stderr)
         sys.exit(1) # Exit if setup fails, as subsequent steps depend on it.
 
-    # 2. Iterate over  subdirectories and run LogInjector for each 'base.apk'
+    # 2. Iterate over app subdirectories and run LogInjector for each APK
     processed_apks_count = 0
     if not os.path.isdir(apk_files_base_dir):
         print(f"⚠️ Directory '{os.path.abspath(apk_files_base_dir)}' not found. "
@@ -116,80 +116,103 @@ def main():
         _full_path = os.path.join(apk_files_base_dir, _dir_name)
         
         if os.path.isdir(_full_path):
-            base_apk_input_path = os.path.join(_full_path, "base.apk")
+            # --- MODIFICATION START ---
+            # Find any .apk file in the subdirectory
+            apk_files_in_dir = [f for f in os.listdir(_full_path) if f.endswith(".apk")]
+
+            if not apk_files_in_dir:
+                print(f"⚠️ No APK file found in '{_full_path}'. Skipping.", file=sys.stderr)
+                continue  # Skip to the next directory
             
-            if os.path.isfile(base_apk_input_path):
-                file_number=file_number+1
-                print(f"\n--- Processing '{_dir_name}' ( {file_number} out of {number_of_files}) ---")
-                print(f"Found input base.apk: {base_apk_input_path}")
+            if len(apk_files_in_dir) > 1:
+                print(f"⚠️ Multiple APKs found in '{_full_path}': {apk_files_in_dir}. Skipping to avoid ambiguity.", file=sys.stderr)
+                continue # Skip to the next directory
+            
+            # Exactly one APK found, proceed with renaming and processing
+            original_apk_name = apk_files_in_dir[0]
+            original_apk_path = os.path.join(_full_path, original_apk_name)
+            base_apk_input_path = os.path.join(_full_path, "base.apk")
 
-                # Define the *final desired* -specific output directory for the injected APK
-                # This is `sootOutput/<_name>/`
-                _specific_soot_output_dest_dir = os.path.join(soot_global_output_base_dir, _dir_name)
-                os.makedirs(_specific_soot_output_dest_dir, exist_ok=True)
-                print(f"  - Created -specific final output directory in Soot: {os.path.abspath(_specific_soot_output_dest_dir)}")
-                
-                # Define the temporary directory where LogInjector will place its output.
-                # Assuming LogInjector creates its 'sootOutput' subdirectory relative to its CWD.
-                # So, if CWD is `soot_global_output_base_dir`, LogInjector will output to `soot_global_output_base_dir/sootOutput/`.
-                loginjector_temp_output_dir = os.path.join(soot_global_output_base_dir, "sootOutput")
-
+            # Rename the found APK to 'base.apk' for processing, if it's not already named that.
+            if original_apk_path != base_apk_input_path:
+                print(f"  - Renaming '{original_apk_name}' to 'base.apk' in '{_dir_name}' for processing.")
                 try:
-                    print(f"  - Running LogInjector on '{os.path.basename(base_apk_input_path)}'...")
-                    # Set CWD for the Java command to `soot_global_output_base_dir`.
-                    # LogInjector's output (e.g., base.apk) will then appear in `soot_global_output_base_dir/sootOutput/`.
-                    run_command(
-                        ["java", "-Xmx25g", 
-                         "-cp", f"{parent_dir}:" + os.path.join(parent_dir, "Jar_Libs", "*"), # .class and Jar_Libs are one directory up
-                         "LogInjector", 
-                         os.path.join(parent_dir, "Android", "platforms"), # Android/platforms is one directory up
-                         base_apk_input_path], 
-                        check_output=True,
-                        cwd=soot_global_output_base_dir, # CWD is now soot_global_output_base_dir
-                        error_message=f"Error running LogInjector on {os.path.basename(base_apk_input_path)}"
-                    )
-                    
-                    # After LogInjector runs, its output is in `loginjector_temp_output_dir`.
-                    # We need to find the specific APK file (assuming "base.apk" by name).
-                    loginjector_output_apk_path = os.path.join(loginjector_temp_output_dir, "base.apk")
-                    
-                    # Check if the expected output APK exists. If not, try to find any APK.
-                    if not os.path.isfile(loginjector_output_apk_path):
-                        found_apks_in_temp = [f for f in os.listdir(loginjector_temp_output_dir) if f.endswith(".apk")]
-                        if found_apks_in_temp:
-                            loginjector_output_apk_path = os.path.join(loginjector_temp_output_dir, found_apks_in_temp[0])
-                            print(f"  - Expected 'base.apk' not found, using '{os.path.basename(loginjector_output_apk_path)}' instead.")
-                        else:
-                            print(f"⚠️ LogInjector did not produce any APK in '{loginjector_temp_output_dir}'. Skipping move for this .", file=sys.stderr)
-                            continue # Skip to next 
-
-                    # Define the final destination path for the moved APK.
-                    # This will be `sootOutput/<_name>/base.apk`
-                    final_moved_apk_path = os.path.join(_specific_soot_output_dest_dir, os.path.basename(loginjector_output_apk_path))
-                    
-                    # Move the processed APK from the nested temporary location to the desired -specific folder
-                    print(f"  - Moving injected APK from '{os.path.basename(loginjector_temp_output_dir)}/' to '{os.path.basename(_specific_soot_output_dest_dir)}/'...")
-                    shutil.move(loginjector_output_apk_path, final_moved_apk_path)
-                    
-                    # Clean up the temporary LogInjector output directory.
-                    # This removes the `sootOutput/` directory that LogInjector created within `soot_global_output_base_dir`.
-                    if os.path.exists(loginjector_temp_output_dir):
-                        print(f"  - Removing temporary LogInjector output directory: '{os.path.basename(loginjector_temp_output_dir)}'.")
-                        shutil.rmtree(loginjector_temp_output_dir)
-                        
-                    processed_apks_count += 1
-                    print(f"  - LogInjector finished and APK moved for '{os.path.basename(base_apk_input_path)}'")
-
+                    shutil.move(original_apk_path, base_apk_input_path)
                 except Exception as e:
-                    print(f"❌ Error during injection or file move for '{os.path.basename(base_apk_input_path)}': {e}", file=sys.stderr)
-            else:
-                print(f"⚠️ 'base.apk' not found in '{_full_path}'. Skipping.", file=sys.stderr)
+                    print(f"❌ Failed to rename '{original_apk_name}': {e}. Skipping directory '{_dir_name}'.", file=sys.stderr)
+                    continue
+            # --- MODIFICATION END ---
+            
+            # --- Start processing the 'base.apk' ---
+            file_number=file_number+1
+            print(f"\n--- Processing '{_dir_name}' ( {file_number} out of {number_of_files}) ---")
+            print(f"Found input APK: {base_apk_input_path}")
+
+            # Define the *final desired* app-specific output directory for the injected APK
+            # This is `sootOutput/<app_name>/`
+            _specific_soot_output_dest_dir = os.path.join(soot_global_output_base_dir, _dir_name)
+            os.makedirs(_specific_soot_output_dest_dir, exist_ok=True)
+            print(f"  - Created app-specific final output directory in Soot: {os.path.abspath(_specific_soot_output_dest_dir)}")
+            
+            # Define the temporary directory where LogInjector will place its output.
+            # Assuming LogInjector creates its 'sootOutput' subdirectory relative to its CWD.
+            # So, if CWD is `soot_global_output_base_dir`, LogInjector will output to `soot_global_output_base_dir/sootOutput/`.
+            loginjector_temp_output_dir = os.path.join(soot_global_output_base_dir, "sootOutput")
+
+            try:
+                print(f"  - Running LogInjector on '{os.path.basename(base_apk_input_path)}'...")
+                # Set CWD for the Java command to `soot_global_output_base_dir`.
+                # LogInjector's output (e.g., base.apk) will then appear in `soot_global_output_base_dir/sootOutput/`.
+                run_command(
+                    ["java", "-Xmx25g", 
+                     "-cp", f"{parent_dir}:" + os.path.join(parent_dir, "Jar_Libs", "*"), # .class and Jar_Libs are one directory up
+                     "LogInjector", 
+                     os.path.join(parent_dir, "Android", "platforms"), # Android/platforms is one directory up
+                     base_apk_input_path], 
+                    check_output=True,
+                    cwd=soot_global_output_base_dir, # CWD is now soot_global_output_base_dir
+                    error_message=f"Error running LogInjector on {os.path.basename(base_apk_input_path)}"
+                )
+                
+                # After LogInjector runs, its output is in `loginjector_temp_output_dir`.
+                # We need to find the specific APK file (assuming "base.apk" by name).
+                loginjector_output_apk_path = os.path.join(loginjector_temp_output_dir, "base.apk")
+                
+                # Check if the expected output APK exists. If not, try to find any APK.
+                if not os.path.isfile(loginjector_output_apk_path):
+                    found_apks_in_temp = [f for f in os.listdir(loginjector_temp_output_dir) if f.endswith(".apk")]
+                    if found_apks_in_temp:
+                        loginjector_output_apk_path = os.path.join(loginjector_temp_output_dir, found_apks_in_temp[0])
+                        print(f"  - Expected 'base.apk' not found, using '{os.path.basename(loginjector_output_apk_path)}' instead.")
+                    else:
+                        print(f"⚠️ LogInjector did not produce any APK in '{loginjector_temp_output_dir}'. Skipping move for this app.", file=sys.stderr)
+                        continue # Skip to next app
+
+                # Define the final destination path for the moved APK.
+                # This will be `sootOutput/<app_name>/base.apk`
+                final_moved_apk_path = os.path.join(_specific_soot_output_dest_dir, os.path.basename(loginjector_output_apk_path))
+                
+                # Move the processed APK from the nested temporary location to the desired app-specific folder
+                print(f"  - Moving injected APK from '{os.path.basename(loginjector_temp_output_dir)}/' to '{os.path.basename(_specific_soot_output_dest_dir)}/'...")
+                shutil.move(loginjector_output_apk_path, final_moved_apk_path)
+                
+                # Clean up the temporary LogInjector output directory.
+                # This removes the `sootOutput/` directory that LogInjector created within `soot_global_output_base_dir`.
+                if os.path.exists(loginjector_temp_output_dir):
+                    print(f"  - Removing temporary LogInjector output directory: '{os.path.basename(loginjector_temp_output_dir)}'.")
+                    shutil.rmtree(loginjector_temp_output_dir)
+                    
+                processed_apks_count += 1
+                print(f"  - LogInjector finished and APK moved for '{os.path.basename(base_apk_input_path)}'")
+
+            except Exception as e:
+                print(f"❌ Error during injection or file move for '{os.path.basename(base_apk_input_path)}': {e}", file=sys.stderr)
         else:
             print(f"Skipping non-directory item in {os.path.basename(apk_files_base_dir)}: {_full_path}")
 
     if processed_apks_count == 0:
-        print("\n😔 No 'base.apk' files were found and processed in the specified directory structure.")
-        print(f"Ensure '{os.path.abspath(apk_files_base_dir)}' contains subdirectories, each with a 'base.apk' file.")
+        print("\n😔 No APK files were found and processed in the specified directory structure.")
+        print(f"Ensure '{os.path.abspath(apk_files_base_dir)}' contains subdirectories, each with a single '.apk' file.")
         sys.exit(0)
 
     # 3. Run post-processing on the accumulated sootOutput
@@ -199,14 +222,14 @@ def main():
         if not os.path.isdir(soot_global_output_base_dir) or not os.listdir(soot_global_output_base_dir):
             print("  - Global 'sootOutput' directory is empty or not found. No files to post-process.", file=sys.stderr)
         else:
-            # Iterate through each  subdirectory within the global sootOutput folder
+            # Iterate through each app subdirectory within the global sootOutput folder
             for _soot_output_sub_dir_name in os.listdir(soot_global_output_base_dir):
                 _soot_output_sub_dir_path = os.path.join(soot_global_output_base_dir, _soot_output_sub_dir_name)
                 
                 if os.path.isdir(_soot_output_sub_dir_path):
-                    print(f"  - Processing outputs for : {_soot_output_sub_dir_name}")
+                    print(f"  - Processing outputs for app: {_soot_output_sub_dir_name}")
                     
-                    # Iterate through the files *within* this 's soot output subdirectory
+                    # Iterate through the files *within* this app's soot output subdirectory
                     for item_name in os.listdir(_soot_output_sub_dir_path):
                         item_full_path = os.path.join(_soot_output_sub_dir_path, item_name)
                         
@@ -243,12 +266,12 @@ def main():
                                 print(f"    - Removed {idsig_file} from script directory.")
                             
                             # Copy the final signed APK to the dedicated final output directory,
-                            # maintaining the -specific subdirectory structure.
-                            final__output_dir = os.path.join(final_output_dir, _soot_output_sub_dir_name)
-                            os.makedirs(final__output_dir, exist_ok=True) # Ensure  sub-dir exists in final output
+                            # maintaining the app-specific subdirectory structure.
+                            final_app_output_dir = os.path.join(final_output_dir, _soot_output_sub_dir_name)
+                            os.makedirs(final_app_output_dir, exist_ok=True) # Ensure app sub-dir exists in final output
                             
                             print(f"    - Copying 'signed-{filename}' to {os.path.basename(final_output_dir)}/{_soot_output_sub_dir_name}/...")
-                            shutil.copy(signed_apk_path, final__output_dir)
+                            shutil.copy(signed_apk_path, final_app_output_dir)
                             print(f"    - Successfully processed and copied signed '{filename}'")
                         else:
                             print(f"  - Skipping non-APK file or Info.md in {_soot_output_sub_dir_name}: {item_name}")
@@ -261,7 +284,7 @@ def main():
                 print(f"  - Cleaned up lingering {idsig_file} from script directory after all post-processing.")
 
         print(f"\n--- Script Finished ---")
-        print(f"Summary: Successfully processed {processed_apks_count} 'base.apk' file(s) and applied post-processing.")
+        print(f"Summary: Successfully processed {processed_apks_count} APK file(s) and applied post-processing.")
         print(f"Injected and signed APKs are in '{os.path.abspath(final_output_dir)}' directory.")
     except Exception as e:
         print(f"❌ Post-processing failed: {e}", file=sys.stderr)
