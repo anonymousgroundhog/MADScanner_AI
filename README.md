@@ -11,3 +11,8 @@ Next, run `APK_Resigner.py` to cleanup the sootOutput directory and sign the APK
 Next, run `File_Cleanup.py` to remove any files that contain no base.apk -->
 
 Next, run `Clean_Directories.py` to remove all folders and files in the sootOutput and APK_Files_To_Analyze folders.
+
+# Instrumenting and generating models
+First, run `Instrument_APK_Files_In_Soot_Output_Injector_APK_Files_Directory.py` which will generate the logs.
+
+Next, run `Analyze_And_Construct_FSM_Model_From_Log_File.py` to generate the models based on the log details.

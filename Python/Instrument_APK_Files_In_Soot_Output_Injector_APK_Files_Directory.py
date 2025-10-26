@@ -451,9 +451,9 @@ if __name__ == "__main__":
     
     # You can uncomment any of the lines below to run the desired function
     
-    # cleanup_directories(injected_apk_dir)
-    # find_matching_apks(injected_apk_dir, original_apk_dir)
-    # process_apks(injected_apk_dir)
+    cleanup_directories(injected_apk_dir)
+    find_matching_apks(injected_apk_dir, original_apk_dir)
+    process_apks(injected_apk_dir)
     start_logcat_capture()
     run_appium_tests(injected_apk_dir)
     stop_logcat_capture()
