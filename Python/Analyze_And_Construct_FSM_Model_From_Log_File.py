@@ -102,7 +102,16 @@ FSM_TRANSITIONS = {
     # Transitions from "Advertisement engagement is made"
     (STATE_ENGAGEMENT, "onPause("): STATE_ENGAGEMENT, # Self-loop
 }
-# --------------------------------------------------------
+
+# --- NEW: Define "Pass" states ---
+# If an app reaches any of these states, it's considered a "Pass"
+PASS_STATES = {
+    STATE_AD_LOADED,
+    STATE_IMPRESSION,
+    STATE_ENGAGEMENT,
+    STATE_ADS_DISPLAYED, # Reaching the state where ads are shown is also a pass
+}
+# ---------------------------------
 
 # Prefixes to ignore when identifying "app" packages
 STANDARD_PACKAGE_PREFIXES = (
@@ -132,7 +141,8 @@ ENABLE_COLOR = not (os.name == 'nt')
 # --- ANSI Color Constants ---
 GREEN = '\033[92m' if ENABLE_COLOR else ''
 YELLOW = '\033[93m' if ENABLE_COLOR else ''
-CYAN = '\033[96m' if ENABLE_COLOR else '' # Added for FSM methods
+RED = '\033[91m' if ENABLE_COLOR else '' # For "Fail"
+CYAN = '\033[96m' if ENABLE_COLOR else ''
 ENDC = '\033[0m' if ENABLE_COLOR else ''
 # ----------------------------
 
@@ -438,17 +448,26 @@ def print_fsm_reports(app_fsm_traces):
     """
     print(f"\n{YELLOW}--- Generated FSM State Traces (Based on model.jpg) ---{ENDC}")
     
-    if not app_fsm_traces:
+    # Filter out GMS ads from the trace list before checking emptiness
+    app_only_traces = {k: v for k, v in app_fsm_traces.items() if k != GMS_ADS_KEYWORD}
+
+    if not app_only_traces:
         print("  No FSM transitions found for any identified app.")
+        print(f"--- End of FSM Traces ---")
         return
 
-    all_empty = all(not trace for trace in app_fsm_traces.values())
+    all_empty = all(not trace for trace in app_only_traces.values())
     if all_empty:
         print("  No FSM transitions were found in the debug logs for any identified app.")
         print(f"--- End of FSM Traces ---")
         return
 
     for app_key, trace in app_fsm_traces.items():
+        # --- NEW: Skip GMS Ads from this report ---
+        if app_key == GMS_ADS_KEYWORD:
+            continue
+        # ----------------------------------------
+        
         print(f"\n--- FSM Trace for: {GREEN}{app_key}{ENDC} ---")
         if not trace:
             print("  No FSM transitions found for this app.")
@@ -467,6 +486,7 @@ def print_fsm_reports(app_fsm_traces):
 def generate_html_report(generated_pngs, output_dir):
     """
     Generates a simple HTML file to display the generated PNG images.
+    MODIFIED: Now adds a Pass/Fail/Trace badge to each title.
     """
     print(f"\n{YELLOW}--- Generating FSM Report HTML ---{ENDC}")
     
@@ -496,10 +516,15 @@ def generate_html_report(generated_pngs, output_dir):
 """
     
     # Add each PNG to the HTML
-    for png_file, app_name in generated_pngs:
+    for png_file, app_name, status, status_color in generated_pngs:
         html_content += f"""
             <div class="rounded-lg shadow-md overflow-hidden bg-white">
-                <h2 class="text-2xl font-semibold mb-0 p-4 bg-gray-50 border-b">{app_name}</h2>
+                <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
+                    <h2 class="text-2xl font-semibold">{app_name}</h2>
+                    <span class="text-sm font-medium px-3 py-1 rounded-full {status_color}">
+                        {status}
+                    </span>
+                </div>
                 <div class"p-4">
                     <img src="{png_file}" alt="FSM Diagram for {app_name}" class="w-full">
                 </div>
@@ -533,6 +558,7 @@ def generate_fsm_png_report(app_fsm_traces, output_dir):
     """
     Generates a .png file for each app's FSM trace using graphviz
     and then generates a single HTML file to display them all.
+    MODIFIED: Now determines "Pass/Fail" status and adds it to the title.
     """
     print(f"\n{YELLOW}--- Generating FSM Visualization (PNGs) ---{ENDC}")
     
@@ -541,23 +567,45 @@ def generate_fsm_png_report(app_fsm_traces, output_dir):
     all_states.update(FSM_TRANSITIONS.values())
     all_states.add(STATE_START)
 
-    # Store (filename, app_name) tuples for the HTML report
+    # Store (filename, app_name, status, status_color) tuples for the HTML report
     generated_pngs = []
 
     for app_name, trace in app_fsm_traces.items():
+        # --- NEW: Skip GMS Ads from diagram generation ---
+        if app_name == GMS_ADS_KEYWORD:
+            print(f"  Skipping diagram generation for: {app_name} (system package)")
+            continue
+        # -----------------------------------------------
+        
         try:
             print(f"  Generating diagram for: {app_name}...")
             
-            # Create lookup sets for this app's trace
-            traced_transitions = set(f"{t[0]}|{t[1]}|{t[2]}" for t in trace)
+            # --- Pass/Fail/Trace Logic ---
+            status = "FAIL"
+            status_color = "bg-red-100 text-red-800" # Tailwind classes for red
+            
+            # Get all states this app visited
             traced_states = set(t[0] for t in trace)
             traced_states.update(t[2] for t in trace)
             if not trace:
-                traced_states.add(STATE_START) # Always color the start state
+                traced_states.add(STATE_START) # Always count the start state
+            
+            # Check if any visited state is a "PASS" state
+            if any(state in PASS_STATES for state in traced_states):
+                status = "PASS"
+                status_color = "bg-green-100 text-green-800" # Tailwind for green
+            
+            # --- End Pass/Fail Logic ---
+            
+            # Create lookup sets for this app's trace
+            traced_transitions = set(f"{t[0]}|{t[1]}|{t[2]}" for t in trace)
+            
             
             # --- Create the Graphviz Digraph ---
+            # Add status to the main label
+            dot_label = f"FSM Trace for {app_name}\nStatus: {status}"
             dot = graphviz.Digraph(comment=f'FSM for {app_name}')
-            dot.attr(rankdir='TB', newrank='true', label=f'FSM Trace for {app_name}', fontsize='20')
+            dot.attr(rankdir='TB', newrank='true', label=dot_label, fontsize='20')
 
             # 1. Define ALL states (nodes) first
             for state in all_states:
@@ -612,7 +660,7 @@ def generate_fsm_png_report(app_fsm_traces, output_dir):
             dot.render(output_path_base, format='png', cleanup=True)
             
             print(f"    {GREEN}Success!{ENDC} Saved to {png_filename}")
-            generated_pngs.append((png_filename, app_name))
+            generated_pngs.append((png_filename, app_name, status, status_color))
 
         except Exception as e:
             print(f"\n  {YELLOW}--- WARNING ---{ENDC}")
