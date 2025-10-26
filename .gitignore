@@ -1,4 +1,5 @@
-*APK_Files_To_Analyze/**/*.apk
+APK_Files_To_Analyze/**/*.apk
+APK_Files_To_Analyze/**/*.ini
 *.apk
 *.idsig
 *.class
