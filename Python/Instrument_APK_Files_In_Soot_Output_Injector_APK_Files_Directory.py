@@ -255,18 +255,57 @@ def get_apk_info(apk_path):
         print(f"    - Error running aapt: {e}", file=sys.stderr)
         return None
 
-def robust_click_on_elements(driver, locator_strategy, locator_value, text_filter=None, max_attempts=3):
-    """Finds and clicks on elements robustly."""
+def robust_click_on_elements(driver, locator_strategy, locator_value, text_filters=None, max_attempts=3):
+    """
+    Finds and clicks on elements robustly.
+    Can accept a single string or a list of strings for text_filters.
+    """
+    # --- MODIFIED: Handle single string or list for text_filters ---
+    if text_filters and not isinstance(text_filters, (list, tuple)):
+        # If a single string is passed, wrap it in a list
+        text_filters = [text_filters]
+    
+    if text_filters:
+        # Convert all filters to lowercase once
+        text_filters = [f.lower() for f in text_filters]
+    # -----------------------------------------------------------------
+
     for _ in range(max_attempts):
         try:
             elements = WebDriverWait(driver, 5).until(
                 EC.presence_of_all_elements_located((locator_strategy, locator_value))
             )
+            
+            clicked_something = False
             for element in elements:
-                if element.is_displayed() and (text_filter is None or text_filter.lower() in element.text.lower()):
+                if not element.is_displayed():
+                    continue
+
+                # --- MODIFIED: Check against list of filters ---
+                if text_filters is None:
+                    # No filter, just click
+                    element_text = element.text
                     element.click()
-                    print(f"  -> Clicked '{element.text}'")
+                    print(f"  -> Clicked '{element_text}' (no filter)")
+                    clicked_something = True
                     time.sleep(1)
+                else:
+                    # Check against all text filters
+                    element_text = element.text
+                    element_text_lower = element_text.lower()
+                    for f in text_filters:
+                        if f in element_text_lower:
+                            element.click()
+                            print(f"  -> Clicked '{element_text}' (matches '{f}')")
+                            clicked_something = True
+                            time.sleep(1)
+                            break # Move to the next element
+            # -----------------------------------------------
+            
+            if not clicked_something:
+                # If we went through all elements and didn't click, we're done
+                break
+
         except (TimeoutException, NoSuchElementException):
             break 
         except Exception as e:
@@ -277,18 +316,44 @@ def click_ad_locations(driver, expected_activity):
     """
     Clicks on predefined coordinates, and if navigation occurs,
     attempts to return to the original app activity.
+    
+    FIXED: Replaced hard-coded coordinates with dynamic, screen-percentage-based
+    coordinates to reliably click banner locations on different screen sizes.
     """
-    print("\n  - Clicking on predefined ad locations...")
-    ad_coordinates = [
-        (500, 250),  # Top banner
-        (500, 1800), # Bottom banner
-        (500, 1000), # Middle of the screen for interstitial ads
-    ]
+    print("\n  - Dynamically calculating ad locations...")
+    try:
+        window_size = driver.get_window_size()
+        width = window_size.get('width', 1080) # Default to 1080p if not found
+        height = window_size.get('height', 1920) # Default to 1080p if not found
+        
+        mid_x = width * 0.5
+        
+        # Define coordinates based on screen percentage
+        ad_coordinates = [
+            (mid_x, height * 0.15), # Top banner (15% from top)
+            (mid_x, height * 0.95), # Bottom banner (95% from top) <-- Clicks bottom-middle
+            (mid_x, height * 0.50), # Middle of the screen
+        ]
+        print(f"  - Screen size detected: {width}x{height}. Clicking relative locations.")
+        
+    except Exception as e:
+        print(f"  - WARNING: Could not get window size. Defaulting to hard-coded coordinates. Error: {e}", file=sys.stderr)
+        # Fallback to original hard-coded values if window size fails
+        ad_coordinates = [
+            (500, 250),  # Top banner
+            (500, 1800), # Bottom banner
+            (500, 1000), # Middle of the screen for interstitial ads
+        ]
 
+    print("\n  - Clicking on ad locations...")
     for x, y in ad_coordinates:
         try:
-            print(f"    - Tapping at coordinate: ({x}, {y})")
-            driver.tap([(x, y)])
+            # Taps require integers
+            int_x = int(x)
+            int_y = int(y)
+            
+            print(f"    - Tapping at coordinate: ({int_x}, {int_y})")
+            driver.tap([(int_x, int_y)])
             time.sleep(5)  # Allow time for potential navigation
 
             current_activity = driver.current_activity
@@ -307,7 +372,7 @@ def click_ad_locations(driver, expected_activity):
                 print("    - Did not navigate away from the app.")
 
         except Exception as e:
-            print(f"    - Could not tap at ({x}, {y}): {e}", file=sys.stderr)
+            print(f"    - Could not tap at ({int_x}, {int_y}): {e}", file=sys.stderr)
 
 def ensure_app_in_foreground(driver, app_package):
     """
@@ -388,18 +453,22 @@ def run_appium_tests(root_dir):
             WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.XPATH, "//*[@displayed='true']")))
             print("  - App is ready.")
 
-            # Ensure app is in the foreground before starting
+            # --- MODIFIED: Handle permissions *immediately* after app start ---
+            print("\n  - Handling initial permission dialogs...")
+            # We will try to click any button that looks like an "accept" button
+            permission_buttons = ["allow", "while using the app", "ok", "accept"]
+            robust_click_on_elements(driver, By.CLASS_NAME, "android.widget.Button", text_filters=permission_buttons)
+            # -----------------------------------------------------------------
+
+            # Ensure app is in the foreground after handling dialogs
             ensure_app_in_foreground(driver, app_package)
+            
             # Click on predefined ad coordinates
             click_ad_locations(driver, app_activity)
 
-            # Ensure app is in the foreground before handling permissions
-            ensure_app_in_foreground(driver, app_package)
-            # Handle common permission dialogs
-            robust_click_on_elements(driver, By.CLASS_NAME, "android.widget.Button", "allow")
-            
             # Ensure app is in the foreground before swiping
             ensure_app_in_foreground(driver, app_package)
+            
             # Swipe the screen to potentially trigger more ads
             print("\n  - Swiping the screen...")
             driver.swipe(500, 1600, 500, 400, 1000)
@@ -408,7 +477,7 @@ def run_appium_tests(root_dir):
             # Ensure app is in the foreground for the final check
             ensure_app_in_foreground(driver, app_package)
             # Final check for close buttons on any new ads
-            robust_click_on_elements(driver, By.CLASS_NAME, "android.widget.Button", "close")
+            robust_click_on_elements(driver, By.CLASS_NAME, "android.widget.Button", text_filters=["close"])
 
         except Exception as e:
             print(f"  - Error during Appium test for {app_package}: {e}", file=sys.stderr)

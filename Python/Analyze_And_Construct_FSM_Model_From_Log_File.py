@@ -4,6 +4,7 @@ import glob
 import sys
 from collections import defaultdict
 import json
+import shutil  # <-- ADDED for copying the model.jpg file
 
 # --- NEW: Check for Graphviz ---
 # This new approach requires the 'graphviz' Python library
@@ -53,6 +54,7 @@ FSM_METHODS = (
     "onResume(",
     "onPause(",
     "onAdImpression(",
+    ON_CREATE_SIGNATURE, # <-- FIXED: Add onCreate to the list of methods to trace
 )
 # ----------------------------------
 
@@ -68,6 +70,10 @@ STATE_ENGAGEMENT = "Advertisement engagement is made"
 
 # Transitions: { (from_state, method_call): to_state }
 FSM_TRANSITIONS = {
+    # --- FIXED: Add a self-loop for onCreate ---
+    # This ensures onCreate is captured in the trace
+    (STATE_START, ON_CREATE_SIGNATURE): STATE_START,
+
     # Transitions from "App has started"
     (STATE_START, "attachInfo("): STATE_ADS_DISPLAYED,
     (STATE_START, "build("): STATE_ADV_SET,
@@ -301,6 +307,10 @@ def print_highlighted_logs(input_path, input_basename, found_base_packages, app_
     lines_printed = 0
     seen_base_packages = set()
     
+    # --- FIXED: Track the last *app* key seen ---
+    last_seen_app_key = None
+    # -------------------------------------------
+    
     # Define the exact string to check for GMS Ads
     GMS_ADS_START_STRING = STRIP_BEFORE_KEYWORD + " <" + GMS_ADS_KEYWORD
 
@@ -329,10 +339,16 @@ def print_highlighted_logs(input_path, input_basename, found_base_packages, app_
                         current_full_pkg = pkg
                         current_base_pkg = base_pkg
                         current_app_key = base_pkg # Use base package as the key
+                        
+                        # --- FIXED: Remember this app key ---
+                        last_seen_app_key = base_pkg
+                        # ------------------------------------
                 
                 # Check if it's a GMS Ads line
                 if processed_line.startswith(GMS_ADS_START_STRING):
-                    current_app_key = GMS_ADS_KEYWORD # Use GMS keyword as the key
+                    # --- FIXED: Attribute this call to the last app seen ---
+                    current_app_key = last_seen_app_key
+                    # -----------------------------------------------------
                 # --- End package info ---
                 
                 
@@ -449,7 +465,9 @@ def print_fsm_reports(app_fsm_traces):
     print(f"\n{YELLOW}--- Generated FSM State Traces (Based on model.jpg) ---{ENDC}")
     
     # Filter out GMS ads from the trace list before checking emptiness
-    app_only_traces = {k: v for k, v in app_fsm_traces.items() if k != GMS_ADS_KEYWORD}
+    # FIXED: This filter is no longer needed, as GMS ads are now part of the app trace.
+    # app_only_traces = {k: v for k, v in app_fsm_traces.items() if k != GMS_ADS_KEYWORD}
+    app_only_traces = app_fsm_traces # Keep all traces
 
     if not app_only_traces:
         print("  No FSM transitions found for any identified app.")
@@ -463,7 +481,7 @@ def print_fsm_reports(app_fsm_traces):
         return
 
     for app_key, trace in app_fsm_traces.items():
-        # --- NEW: Skip GMS Ads from this report ---
+        # --- FIXED: GMS_ADS_KEYWORD should no longer be a key, but check just in case ---
         if app_key == GMS_ADS_KEYWORD:
             continue
         # ----------------------------------------
@@ -478,40 +496,97 @@ def print_fsm_reports(app_fsm_traces):
             print(f"  Start State: {trace[0][0]}")
         
             for i, (from_state, method_call, to_state) in enumerate(trace):
+                # FIXED: Clean up the method name for printing
                 method_name = method_call.replace('(', '')
+                if ON_CREATE_SIGNATURE in method_name:
+                    method_name = "onCreate" # Make it cleaner
+                
                 print(f"  {i + 1: >3}: [{from_state}] --({CYAN}{method_name}{ENDC})--> [{to_state}]")
             
     print(f"\n--- End of FSM Traces ---")
 
-def generate_html_report(generated_pngs, output_dir):
+def generate_html_report(generated_pngs, output_dir, input_basename):
     """
     Generates a simple HTML file to display the generated PNG images.
     MODIFIED: Now adds a Pass/Fail/Trace badge to each title.
+    MODIFIED: Filename is now based on the input log file.
+    MODIFIED: Now embeds the 'model.jpg' reference image at the top.
     """
     print(f"\n{YELLOW}--- Generating FSM Report HTML ---{ENDC}")
     
-    if not generated_pngs:
-        print("  No PNG files were generated, skipping HTML report.")
-        return
+    # --- NEW: Copy model.jpg to the log directory ---
+    MODEL_IMAGE_NAME = "model.png" # <-- MODIFIED
+    model_image_path_dest = os.path.join(output_dir, MODEL_IMAGE_NAME)
+    model_html_content = ""
+    try:
+        # Assumes model.png is in the same dir as the script
+        # Note: If script is in subdir, this might need to be "../model.png"
+        # For simplicity, we assume it's where the script is run from.
+        shutil.copy(MODEL_IMAGE_NAME, model_image_path_dest)
+        print(f"  - Copied {MODEL_IMAGE_NAME} to log directory for report.")
+        # Image path in HTML is just the filename, since it's in the same dir
+        model_html_content = f"""
+            <div class="rounded-lg shadow-md overflow-hidden bg-white mb-12">
+                <div class="p-4 bg-gray-50 border-b">
+                    <h2 class="text-2xl font-semibold">Correct Behavior Model Reference</h2>
+                </div>
+                <div class="p-4 bg-white">
+                    <img src="{MODEL_IMAGE_NAME}" alt="Correct FSM Behavior Model" class="w-full">
+                </div>
+            </div>
+        """
+    except FileNotFoundError:
+        print(f"  - {YELLOW}WARNING:{ENDC} '{MODEL_IMAGE_NAME}' not found in the script directory.")
+        print(f"  - Skipping reference model in HTML report.")
+        model_html_content = f"""
+            <div class="rounded-lg shadow-md overflow-hidden bg-red-100 text-red-800 p-4 mb-12">
+                <h2 class="text-2xl font-semibold mb-2 text-red-900">Correct Behavior Model Reference</h2>
+                <p><b>{RED}Error:{ENDC}</b> '{MODEL_IMAGE_NAME}' not found. Could not embed reference model.</p>
+            </div>
+        """
+    except Exception as e:
+        print(f"  - {YELLOW}WARNING:{ENDC} Could not copy '{MODEL_IMAGE_NAME}'. Error: {e!r}")
+        model_html_content = "" # Just skip it
+    # -----------------------------------------------
 
-    html_content = """
+    if not generated_pngs:
+        print("  No PNG files were generated, skipping HTML report generation.")
+        # We might still want the report if the model was copied, so we'll check
+        if not model_html_content:
+             return # Nothing to do
+        else:
+            print("  - Proceeding to generate HTML report to show reference model.")
+
+
+    # Create the new filename based on the input log file
+    base_name, _ = os.path.splitext(input_basename)
+    output_filename = f"{base_name}_fsm_report.html"
+    output_path = os.path.join(output_dir, output_filename)
+    
+    html_content = f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FSM Log Traces Report</title>
+    <title>FSM Log Traces Report for {input_basename}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body {
+        body {{
             font-family: 'Inter', sans-serif;
             background-color: #f4f4f5; /* Tailwind gray-100 */
-        }
+        }}
     </style>
 </head>
 <body class="p-8">
     <div class="container mx-auto max-w-6xl">
-        <h1 class="text-3xl font-bold mb-8 text-gray-800">FSM State Diagram Traces</h1>
+        <h1 class="text-3xl font-bold mb-2 text-gray-800">FSM State Diagram Traces</h1>
+        <p class="text-lg text-gray-600 mb-8">Report for: {input_basename}</p>
+        
+        <!-- --- NEW: Injected Reference Model --- -->
+        {model_html_content}
+        <!-- ------------------------------------- -->
+
         <div class="space-y-12">
 """
     
@@ -525,7 +600,7 @@ def generate_html_report(generated_pngs, output_dir):
                         {status}
                     </span>
                 </div>
-                <div class"p-4">
+                <div class="p-4 bg-white">
                     <img src="{png_file}" alt="FSM Diagram for {app_name}" class="w-full">
                 </div>
             </div>
@@ -539,9 +614,6 @@ def generate_html_report(generated_pngs, output_dir):
 </html>
 """
     
-    output_filename = "fsm_report.html"
-    output_path = os.path.join(output_dir, output_filename)
-    
     try:
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
@@ -554,11 +626,12 @@ def generate_html_report(generated_pngs, output_dir):
     print(f"--- End of Report Generation ---")
 
 
-def generate_fsm_png_report(app_fsm_traces, output_dir):
+def generate_fsm_png_report(app_fsm_traces, output_dir, input_basename):
     """
     Generates a .png file for each app's FSM trace using graphviz
     and then generates a single HTML file to display them all.
     MODIFIED: Now determines "Pass/Fail" status and adds it to the title.
+    MODIFIED: Passes input_basename to the HTML report generator.
     """
     print(f"\n{YELLOW}--- Generating FSM Visualization (PNGs) ---{ENDC}")
     
@@ -571,9 +644,8 @@ def generate_fsm_png_report(app_fsm_traces, output_dir):
     generated_pngs = []
 
     for app_name, trace in app_fsm_traces.items():
-        # --- NEW: Skip GMS Ads from diagram generation ---
+        # --- FIXED: GMS_ADS_KEYWORD should no longer be a key ---
         if app_name == GMS_ADS_KEYWORD:
-            print(f"  Skipping diagram generation for: {app_name} (system package)")
             continue
         # -----------------------------------------------
         
@@ -630,7 +702,10 @@ def generate_fsm_png_report(app_fsm_traces, output_dir):
 
             # 2. Define ALL transitions (edges)
             for (from_state, method), to_state in FSM_TRANSITIONS.items():
+                # FIXED: Clean up method name for diagram
                 clean_method = method.replace('(', '')
+                if ON_CREATE_SIGNATURE in clean_method:
+                    clean_method = "onCreate"
                 
                 edge_attrs = {
                     'label': f' {clean_method} ',
@@ -651,10 +726,15 @@ def generate_fsm_png_report(app_fsm_traces, output_dir):
             # --- Render the .png file ---
             # Create a filename safe for all OSes
             safe_app_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', app_name)
-            output_basename = f'fsm_diagram_{safe_app_name}'
+            
+            # --- NEW: Base PNG name on log file name ---
+            base_log_name, _ = os.path.splitext(input_basename)
+            output_basename = f'{base_log_name}_fsm_diagram_{safe_app_name}'
+            # -------------------------------------------
+            
             output_path_base = os.path.join(output_dir, output_basename)
             
-            # This renders 'fsm_diagram_app_name.gv' and 'fsm_diagram_app_name.gv.png'
+            # This renders 'log_name_fsm_diagram_app_name.gv' and 'log_name_fsm_diagram_app_name.gv.png'
             # We set cleanup=True to remove the intermediate .gv file
             png_filename = f"{output_basename}.png"
             dot.render(output_path_base, format='png', cleanup=True)
@@ -677,7 +757,7 @@ def generate_fsm_png_report(app_fsm_traces, output_dir):
                 break 
     
     # --- Now, generate the HTML report ---
-    generate_html_report(generated_pngs, output_dir)
+    generate_html_report(generated_pngs, output_dir, input_basename)
     
     print(f"--- End of Visualization ---")
 
@@ -762,7 +842,7 @@ def extract_debug_logs():
         # ------------------------
         
         # --- Generate PNGs and HTML Report ---
-        generate_fsm_png_report(app_fsm_traces, LOG_DIR)
+        generate_fsm_png_report(app_fsm_traces, LOG_DIR, input_basename)
         # ---------------------------------
 
     except FileNotFoundError:
