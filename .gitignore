@@ -1,5 +1,7 @@
 APK_Files_To_Analyze/**/*.apk
 APK_Files_To_Analyze/**/*.ini
+Python/logcat_logs/*.png
+Python/logcat_logs/*.html
 *.apk
 *.idsig
 *.class
