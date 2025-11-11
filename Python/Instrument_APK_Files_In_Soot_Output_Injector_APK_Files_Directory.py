@@ -14,6 +14,44 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
+# --- NEW: Category prefixes to strip (from screenshot) ---
+# We add the trailing underscore to strip it as well.
+CATEGORY_PREFIXES = (
+    "Art_and_Design_",
+    "Auto_and_Vehicles_",
+    "Beauty_",
+    "Books_Reference_",
+    "Business_",
+    "Comics_",
+    "Communication_",
+    "Dating_",
+    "Educational_",
+    "Entertainment_",
+    "Events_",
+    "Finance_",
+    "Food_and_Drinks_",
+    "Games_",
+    "Health_and_Fitness_",
+    "House_and_Home_",
+    "Lifestyle_",
+    "Maps_and_Navigation_",
+    "Medical_",
+    "Music_and_Audio_",
+    "News_magazine_",
+    "Parenting_",
+    "Personalization_",
+    "Photography_",
+    "Productivity_",
+    "Shopping_",
+    "Social_media_",
+    "Sports_",
+    "Tools_",
+    "Travel_and_local_",
+    "Video_players_and_editors_",
+    "weather_",
+)
+# --------------------------------------------------------
+
 def cleanup_directories(root_dir):
     """
     Removes any file other than 'signed-base.apk' from all subdirectories
@@ -52,9 +90,8 @@ def find_matching_apks(source_dir, search_dir):
     in the search_dir tree, and copies files starting with 'split_config' 
     from the matched directory back to the source subdirectory.
 
-    Args:
-        source_dir (str): The directory containing the subdirectories to check.
-        search_dir (str): The root directory to search within for matching names.
+    MODIFIED: Now strips category prefixes (e.g., "Games_") from
+    directory names before searching.
     """
     print(f"--- Searching for matching APKs and copying split_config files ---\n")
 
@@ -73,14 +110,27 @@ def find_matching_apks(source_dir, search_dir):
         # Check if the item is a directory
         if os.path.isdir(source_item_path):
             subdirectory_name = item
-            print(f"Checking for: {subdirectory_name}")
+            
+            # --- NEW: Check for and strip prefix ---
+            search_name = subdirectory_name
+            for prefix in CATEGORY_PREFIXES:
+                if subdirectory_name.startswith(prefix):
+                    # Strip the prefix to get the real app name
+                    search_name = subdirectory_name[len(prefix):]
+                    print(f"Checking for: {subdirectory_name} (Stripped to: {search_name})")
+                    break # Stop after finding the first match
+            
+            if search_name == subdirectory_name:
+                 print(f"Checking for: {subdirectory_name} (No prefix found)")
+            # -------------------------------------
             
             match_found = False
             # Walk through the entire directory tree of the search directory
             for root, dirnames, _ in os.walk(search_dir):
-                # Check if our subdirectory name exists in the list of directories at this level
-                if subdirectory_name in dirnames:
-                    target_path = os.path.join(root, subdirectory_name)
+                # --- MODIFIED: Use search_name ---
+                if search_name in dirnames:
+                    target_path = os.path.join(root, search_name)
+                    # ---------------------------
                     print(f"  - Match found: {target_path}")
                     match_found = True
 
@@ -99,7 +149,7 @@ def find_matching_apks(source_dir, search_dir):
                     break  # Exit the os.walk loop for this item as we found a match
             
             if not match_found:
-                print(f"  - No match found within the subdirectories of {search_dir}\n")
+                print(f"  - No match found for '{search_name}' within the subdirectories of {search_dir}\n")
 
 def process_apks(root_dir):
     """
@@ -389,9 +439,38 @@ def ensure_app_in_foreground(driver, app_package):
     except Exception as e:
         print(f"  - Could not ensure app is in foreground: {e}", file=sys.stderr)
 
+# --- NEW: Function to check for Play Store popup ---
+def check_for_play_store_popup(driver):
+    """
+    Checks if a 'Get this app from Play' popup is visible.
+    Returns True if found, False otherwise.
+    """
+    try:
+        # Use a short timeout so this check is fast
+        # Find any text view on the screen containing the text
+        text_elements = WebDriverWait(driver, 2).until(
+            EC.presence_of_all_elements_located((By.XPATH, "//*[contains(@text, 'Get this app from Play')]"))
+        )
+        if text_elements:
+             # Check if any of the found elements are actually visible
+             for el in text_elements:
+                 if el.is_displayed():
+                    print(f"  - POPUP DETECTED: 'Get this app from Play' is visible. Stopping test.", file=sys.stderr)
+                    return True
+    except (TimeoutException, NoSuchElementException):
+        # No text elements found or timeout, which is normal
+        return False
+    except Exception as e:
+        # Other potential errors
+        print(f"  - Error during Play Store popup check: {e}", file=sys.stderr)
+        return False
+    return False
+# --------------------------------------------------
+
 def run_appium_tests(root_dir):
     """
     Installs and runs Appium tests on all processed APKs in the root directory.
+    MODIFIED: Now stops test immediately if a "Get this app from Play" popup is found.
     """
     print("\n--- Starting Automated Ad-Clicking Test ---")
 
@@ -453,31 +532,53 @@ def run_appium_tests(root_dir):
             WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.XPATH, "//*[@displayed='true']")))
             print("  - App is ready.")
 
+            # --- NEW: Flag to skip this app's test ---
+            skip_app = False
+            # ------------------------------------------
+
             # --- MODIFIED: Handle permissions *immediately* after app start ---
             print("\n  - Handling initial permission dialogs...")
             # We will try to click any button that looks like an "accept" button
             permission_buttons = ["allow", "while using the app", "ok", "accept"]
             robust_click_on_elements(driver, By.CLASS_NAME, "android.widget.Button", text_filters=permission_buttons)
             # -----------------------------------------------------------------
+            
+            # --- MODIFIED: Check for Play Store popup ---
+            if check_for_play_store_popup(driver):
+                skip_app = True # Set flag to skip
+            # ------------------------------------------
 
-            # Ensure app is in the foreground after handling dialogs
-            ensure_app_in_foreground(driver, app_package)
-            
-            # Click on predefined ad coordinates
-            click_ad_locations(driver, app_activity)
+            if not skip_app:
+                # Ensure app is in the foreground after handling dialogs
+                ensure_app_in_foreground(driver, app_package)
+                
+                # Click on predefined ad coordinates
+                click_ad_locations(driver, app_activity)
 
-            # Ensure app is in the foreground before swiping
-            ensure_app_in_foreground(driver, app_package)
+                # --- MODIFIED: Check for Play Store popup ---
+                if check_for_play_store_popup(driver):
+                    skip_app = True # Set flag to skip
+                # ------------------------------------------
+
+            if not skip_app:
+                # Ensure app is in the foreground before swiping
+                ensure_app_in_foreground(driver, app_package)
+                
+                # Swipe the screen to potentially trigger more ads
+                print("\n  - Swiping the screen...")
+                driver.swipe(500, 1600, 500, 400, 1000)
+                time.sleep(2)
+                
+                # --- MODIFIED: Check for Play Store popup ---
+                if check_for_play_store_popup(driver):
+                    skip_app = True # Set flag to skip
+                # ------------------------------------------
             
-            # Swipe the screen to potentially trigger more ads
-            print("\n  - Swiping the screen...")
-            driver.swipe(500, 1600, 500, 400, 1000)
-            time.sleep(2)
-            
-            # Ensure app is in the foreground for the final check
-            ensure_app_in_foreground(driver, app_package)
-            # Final check for close buttons on any new ads
-            robust_click_on_elements(driver, By.CLASS_NAME, "android.widget.Button", text_filters=["close"])
+            if not skip_app:
+                # Ensure app is in the foreground for the final check
+                ensure_app_in_foreground(driver, app_package)
+                # Final check for close buttons on any new ads
+                robust_click_on_elements(driver, By.CLASS_NAME, "android.widget.Button", text_filters=["close"])
 
         except Exception as e:
             print(f"  - Error during Appium test for {app_package}: {e}", file=sys.stderr)

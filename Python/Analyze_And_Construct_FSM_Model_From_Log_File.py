@@ -41,7 +41,7 @@ FSM_METHODS = (
     "onResume(",
     "onPause(",
     "onAdImpression(",
-    ON_CREATE_SIGNATURE, # <-- Add onCreate to the list of methods to trace
+    ON_CREATE_SIGNATURE,  # <-- Add onCreate to the list of methods to trace
 )
 # ----------------------------------
 
@@ -73,46 +73,40 @@ STATE_ENGAGEMENT = "The app is running and the advertisement engagement is made"
 # we are REMOVING the one line that causes the error you found.
 FSM_TRANSITIONS = {
     # Transitions from STATE_START ("App has started")
-    (STATE_START, ON_CREATE_SIGNATURE): STATE_START, # Custom self-loop
+    (STATE_START, ON_CREATE_SIGNATURE): STATE_START,  # Custom self-loop
     (STATE_START, "build("): STATE_ADV_SET,           # Transition per diagram
-    (STATE_START, "initialize("): STATE_NO_ADS,        # Transition per diagram
-    (STATE_START, "onAdLoaded("): STATE_AD_LOADED,       # Transition per diagram
-    (STATE_START, "onPause("): STATE_ENGAGEMENT,       # Transition per diagram
-    
-    # --- THIS LINE IS REMOVED TO FIX THE BUG ---
-    # (STATE_START, "onResume("): STATE_IMPRESSION,
-    # --- END OF FIX ---
-    
-    # Note: attachInfo() is part of the 6-method rule and does not
-    # have a simple transition from STATE_START.
+    (STATE_START, "initialize("): STATE_NO_ADS,       # Transition per diagram
+    (STATE_START, "onAdLoaded("): STATE_AD_LOADED,    # Transition per diagram
+    (STATE_START, "onPause("): STATE_ENGAGEMENT,      # Transition per diagram
+    # (STATE_START, "onResume("): STATE_IMPRESSION,   # removed
 
     # Transitions from "Ads displayed" (STATE_ADS_DISPLAYED)
-    (STATE_ADS_DISPLAYED, "onAdLoaded("): STATE_ADS_DISPLAYED, # Self-loop
+    (STATE_ADS_DISPLAYED, "onAdLoaded("): STATE_ADS_DISPLAYED,     # Self-loop
     (STATE_ADS_DISPLAYED, "onAdImpression("): STATE_ADS_DISPLAYED, # Self-loop
     (STATE_ADS_DISPLAYED, "onPause("): STATE_ENGAGEMENT,
     (STATE_ADS_DISPLAYED, "onDestroy("): STATE_START,
 
     # Transitions from "AdView was set" (STATE_ADV_SET)
-    (STATE_ADV_SET, "build("): STATE_ADV_SET, # Self-loop
+    (STATE_ADV_SET, "build("): STATE_ADV_SET,  # Self-loop
     (STATE_ADV_SET, "initialize("): STATE_NO_ADS,
     (STATE_ADV_SET, "onDestroy("): STATE_START,
 
     # Transitions from "No Ads displayed" (STATE_NO_ADS)
-    (STATE_NO_ADS, "initialize("): STATE_NO_ADS, # Self-loop
+    (STATE_NO_ADS, "initialize("): STATE_NO_ADS,  # Self-loop
     (STATE_NO_ADS, "onAdLoaded("): STATE_AD_LOADED,
 
     # Transitions from "Advertisement is loaded" (STATE_AD_LOADED)
-    (STATE_AD_LOADED, "onAdLoaded("): STATE_AD_LOADED, # Self-loop
+    (STATE_AD_LOADED, "onAdLoaded("): STATE_AD_LOADED,  # Self-loop
     (STATE_AD_LOADED, "onResume("): STATE_IMPRESSION,
 
     # Transitions from "Advertisement impression is made" (STATE_IMPRESSION)
-    (STATE_IMPRESSION, "onResume("): STATE_IMPRESSION, # Self-loop
+    (STATE_IMPRESSION, "onResume("): STATE_IMPRESSION,  # Self-loop
     (STATE_IMPRESSION, "onPause("): STATE_ENGAGEMENT,
-    (STATE_IMPRESSION, "onDestroy("): STATE_ADV_SET, # From diagram
+    (STATE_IMPRESSION, "onDestroy("): STATE_ADV_SET,  # From diagram
 
     # Transitions from "Advertisement engagement is made" (STATE_ENGAGEMENT)
-    (STATE_ENGAGEMENT, "onPause("): STATE_ENGAGEMENT, # Self-loop in diagram, but let's use the other one
-    (STATE_ENGAGEMENT, "onDestroy("): STATE_START, # Per diagram arrow
+    (STATE_ENGAGEMENT, "onPause("): STATE_ENGAGEMENT,  # Self-loop
+    (STATE_ENGAGEMENT, "onDestroy("): STATE_START,     # Per diagram arrow
 }
 # --- END: MODIFIED ---
 
@@ -167,7 +161,7 @@ ENABLE_COLOR = not (os.name == 'nt')
 # --- ANSI Color Constants ---
 GREEN = '\033[92m' if ENABLE_COLOR else ''
 YELLOW = '\033[93m' if ENABLE_COLOR else ''
-RED = '\033[91m' if ENABLE_COLOR else '' # For "Fail"
+RED = '\033[91m' if ENABLE_COLOR else ''  # For "Fail"
 CYAN = '\033[96m' if ENABLE_COLOR else ''
 ENDC = '\033[0m' if ENABLE_COLOR else ''
 # ----------------------------
@@ -191,14 +185,11 @@ def get_valid_apk_folder_names(search_dir):
     if not os.path.isdir(search_dir):
         print(f"  {YELLOW}WARNING:{ENDC} Directory not found: {search_dir}")
         print(f"  Cannot validate app package names against folders.")
-        return valid_names # Return empty set
+        return valid_names  # Return empty set
 
     for root, dirnames, _ in os.walk(search_dir, topdown=True):
         for dirname in dirnames:
-            # Check if the directory name looks like a package (e.g., com.example.app)
             if '.' in dirname:
-                # We assume if it has a dot, it's a package name.
-                # This will find com.example.app inside Art_and_Design, etc.
                 valid_names.add(dirname)
 
     if valid_names:
@@ -233,9 +224,12 @@ def get_log_file_choice():
         try:
             raw_choice = input(f"\nPlease enter the number of the file (1-{len(all_log_files)}): ")
             choice = int(raw_choice)
-            if 1 <= choice <= len(all_log_files): break
-            else: print(f"Invalid choice.")
-        except ValueError: print("Invalid input.")
+            if 1 <= choice <= len(all_log_files):
+                break
+            else:
+                print(f"Invalid choice.")
+        except ValueError:
+            print("Invalid input.")
 
     chosen_basename = file_basenames[choice - 1]
     chosen_full_path = all_log_files[choice - 1]
@@ -259,9 +253,9 @@ def extract_package_name(package_string):
        (not any(full_potential_package_name.startswith(prefix) for prefix in STANDARD_PACKAGE_PREFIXES)):
         # Basic check: needs at least two parts (e.g., com.example)
         if len(full_potential_package_name.split('.')) >= 2:
-            return full_potential_package_name # Return the full package name
+            return full_potential_package_name
 
-    return None # Return None if filtered or looks invalid
+    return None  # Return None if filtered or looks invalid
 # ---
 
 # ---
@@ -270,7 +264,7 @@ def find_packages_and_stats(input_path):
     Pass 1: Reads the log file to find all full packages and stats without printing.
     Returns a set of found full package names and line counts.
     """
-    found_full_packages = set() # Store full names like com.example.app
+    found_full_packages = set()  # Store full names like com.example.app
     debug_lines_found, total_lines = 0, 0
     with open(input_path, 'r', encoding='utf-8') as in_file:
         for i, line in enumerate(in_file):
@@ -288,7 +282,8 @@ def find_packages_and_stats(input_path):
                         full_pkg = extract_package_name(full_class_name)
                         if full_pkg:
                             found_full_packages.add(full_pkg)
-                except ValueError: pass
+                except ValueError:
+                    pass
 
             # --- Source 2: Info "Install/Uninstall" lines ---
             elif (INFO_PATTERN.search(line) and INFO_KEYWORD in line):
@@ -298,13 +293,18 @@ def find_packages_and_stats(input_path):
                     full_pkg = extract_package_name(package_from_info)
                     if full_pkg:
                         found_full_packages.add(full_pkg)
-                except Exception: pass
+                except Exception:
+                    pass
     return found_full_packages, total_lines, debug_lines_found
 # ---
 
 # --- START: MODIFIED - COMPLEX FSM LOGIC RESTORED ---
 def print_highlighted_logs(input_path, input_basename, found_full_packages, 
-                           app_fsm_traces, app_fsm_current_state, full_pkg_to_base_pkg):
+                           app_fsm_traces, app_fsm_current_state, full_pkg_to_base_pkg, valid_folder_names):
+    # Tracking for app root and libraries
+    base_app_to_root_prefix = {}
+    base_app_to_root_fullpkg = {}
+
     """
     Pass 2: Reads the file again, printing matching debug lines and highlighting,
             and building the FSM trace using the BASE package name as the key.
@@ -343,25 +343,23 @@ def print_highlighted_logs(input_path, input_basename, found_full_packages,
                             last_seen_base_app_key = current_full_pkg_key
                             base_pkg_for_highlight = '.'.join(current_full_pkg_key.split('.')[:2])
 
-
                 is_gms_ads_line = processed_line.startswith(GMS_ADS_START_STRING)
                 if is_gms_ads_line:
                     current_base_app_key = last_seen_base_app_key
                     if current_base_app_key:
                         base_pkg_for_highlight = '.'.join(current_base_app_key.split('.')[:2])
 
-
                 # --- FSM Simulation ---
                 fsm_method_found = None
                 for fsm_method in FSM_METHODS:
-                    if fsm_method in processed_line: fsm_method_found = fsm_method; break
+                    if fsm_method in processed_line:
+                        fsm_method_found = fsm_method
+                        break
                 
-                # Only trace if we have a valid base key for this line
-                if fsm_method_found and current_base_app_key:
+                # Only trace if we have a valid base key for this line AND it's GMS Ads
+                if fsm_method_found and is_gms_ads_line and current_base_app_key and (current_base_app_key in valid_folder_names):
                     
                     # --- START: 6-METHOD (COMPLEX) FSM LOGIC ---
-                    
-                    # Get the complex state: (state_string, seen_methods_set)
                     current_state_tuple = app_fsm_current_state[current_base_app_key]
                     current_state_str = current_state_tuple[0]
                     current_seen_methods = current_state_tuple[1]
@@ -373,58 +371,81 @@ def print_highlighted_logs(input_path, input_basename, found_full_packages,
                     if fsm_method_found in REQUIRED_FOR_ADS_DISPLAYED:
                         new_seen_methods.add(fsm_method_found)
 
-                    # 2. Check for the SPECIAL transition
-                    # (This replaces the simple "attachInfo" transition)
+                    # 2. SPECIAL: if we have all 6 in STATE_START → ADS_DISPLAYED
                     if current_state_str == STATE_START and REQUIRED_FOR_ADS_DISPLAYED.issubset(new_seen_methods):
                         new_state_str = STATE_ADS_DISPLAYED
-                        # Optional: clear the set so it can't re-trigger
-                        # new_seen_methods = set() 
                     else:
-                        # 3. Check for all OTHER standard transitions
+                        # 3. Otherwise follow standard transitions
                         transition_key = (current_state_str, fsm_method_found)
                         if transition_key in FSM_TRANSITIONS:
                             new_state_str = FSM_TRANSITIONS[transition_key]
 
-                    # 4. Save the new state (tuple)
+                    # 4. Save the new state
                     app_fsm_current_state[current_base_app_key] = (new_state_str, new_seen_methods)
                     
-                    # 5. Record the trace *if* the state string changed
+                    # 5. Record the trace if the state changed
                     if new_state_str != current_state_str:
-                         app_fsm_traces[current_base_app_key].append((current_state_str, fsm_method_found, new_state_str))
+                        app_fsm_traces[current_base_app_key].append((current_state_str, fsm_method_found, new_state_str))
                     # --- END: 6-METHOD (COMPLEX) FSM LOGIC ---
-                
                 # --- End FSM Simulation ---
 
-                # --- Log Printing Filter Logic (No changes needed) ---
-                is_first_occurrence = bool(current_full_pkg_key and current_full_pkg_key not in seen_full_packages)
-                is_main_on_create = ("MainActivity" in processed_line and ON_CREATE_SIGNATURE in processed_line)
+                # --- Log Printing Filter Logic (library-aware) ---
+                is_mapped_to_valid = bool(current_base_app_key and (current_base_app_key in valid_folder_names))
+
+                # Decide occurrence type
+                occurrence_type = None  # 'app_first' | 'library_first' | None
+                if current_full_pkg_key and (current_full_pkg_key not in seen_full_packages) and is_mapped_to_valid:
+                    if current_base_app_key not in base_app_to_root_prefix:
+                        parts = current_full_pkg_key.split('.')
+                        root_prefix = '.'.join(parts[:-1]) if len(parts) > 1 else current_full_pkg_key
+                        base_app_to_root_prefix[current_base_app_key] = root_prefix
+                        base_app_to_root_fullpkg[current_base_app_key] = current_full_pkg_key
+                        occurrence_type = 'app_first'
+                    else:
+                        root_prefix = base_app_to_root_prefix[current_base_app_key]
+                        if current_full_pkg_key.startswith(root_prefix + '.'):
+                            occurrence_type = 'library_first'
+                        else:
+                            occurrence_type = 'app_first'
+
                 is_fsm_method_line = any(fsm in processed_line for fsm in FSM_METHODS)
                 is_gms_ads_and_fsm = (is_gms_ads_line and is_fsm_method_line)
-                if not (is_first_occurrence or is_main_on_create or is_gms_ads_and_fsm): continue
+                if not (occurrence_type is not None or is_gms_ads_and_fsm):
+                    continue
                 # --- End Filter Logic ---
 
-                if is_first_occurrence:
-                    print(f"\n  {YELLOW}>>> First occurrence of package: {current_full_pkg_key}{ENDC}")
-                    if current_base_app_key and current_base_app_key != current_full_pkg_key:
-                        print(f"  {YELLOW}    (Mapping to base package: {current_base_app_key}){ENDC}")
+                # --- First occurrence banners (fixed f-strings) ---
+                if occurrence_type:
+                    if occurrence_type == 'app_first':
+                        print(f"\n  {YELLOW}>>> First occurrence of APP package: {current_full_pkg_key}{ENDC}")
+                        if current_base_app_key and current_base_app_key != current_full_pkg_key:
+                            print(f"  {YELLOW}    (Mapping to base package: {current_base_app_key}){ENDC}")
+                    else:
+                        root_full = base_app_to_root_fullpkg.get(current_base_app_key, '')
+                        print(f"\n  {YELLOW}>>> First occurrence of LIBRARY package: {current_full_pkg_key}{ENDC}")
+                        print(f"  {YELLOW}    (Mapping to base package: {current_base_app_key}; library of: {root_full}){ENDC}")
                     seen_full_packages.add(current_full_pkg_key)
 
                 # --- Highlighting ---
                 highlighted_line = processed_line
                 if base_pkg_for_highlight: 
-                     highlighted_line = highlighted_line.replace(base_pkg_for_highlight, f"{GREEN}{base_pkg_for_highlight}{ENDC}")
-                if "MainActivity" in highlighted_line: highlighted_line = highlighted_line.replace("MainActivity", f"{YELLOW}MainActivity{ENDC}")
+                    highlighted_line = highlighted_line.replace(base_pkg_for_highlight, f"{GREEN}{base_pkg_for_highlight}{ENDC}")
+                if "MainActivity" in highlighted_line:
+                    highlighted_line = highlighted_line.replace("MainActivity", f"{YELLOW}MainActivity{ENDC}")
                 if ON_CREATE_SIGNATURE in highlighted_line: 
                     highlighted_line = highlighted_line.replace(ON_CREATE_SIGNATURE, f"{YELLOW}{ON_CREATE_SIGNATURE}{ENDC}")
-                if GMS_ADS_KEYWORD in highlighted_line: highlighted_line = highlighted_line.replace(GMS_ADS_KEYWORD, f"{GREEN}{GMS_ADS_KEYWORD}{ENDC}")
+                if GMS_ADS_KEYWORD in highlighted_line:
+                    highlighted_line = highlighted_line.replace(GMS_ADS_KEYWORD, f"{GREEN}{GMS_ADS_KEYWORD}{ENDC}")
                 for fsm_method in FSM_METHODS:
                     if fsm_method in highlighted_line and fsm_method != ON_CREATE_SIGNATURE and f"{CYAN}{fsm_method}{ENDC}" not in highlighted_line:
                         highlighted_line = highlighted_line.replace(fsm_method, f"{CYAN}{fsm_method}{ENDC}")
                 # --- End Highlighting ---
 
                 print(highlighted_line, end=''); lines_printed += 1
-            except ValueError: pass
-        if lines_printed > 0: print()
+            except ValueError:
+                pass
+        if lines_printed > 0:
+            print()
     print(f"\n--- End of Debug Lines ---")
 # --- END: MODIFIED ---
 
@@ -438,7 +459,9 @@ def print_fsm_reports(app_fsm_traces):
 
     for app_key, trace in app_fsm_traces.items():
         print(f"\n--- FSM Trace for: {GREEN}{app_key}{ENDC} ---") 
-        if not trace: print("  No FSM transitions found for this app."); continue
+        if not trace:
+            print("  No FSM transitions found for this app.")
+            continue
         start_state = trace[0][0] if trace else STATE_START
         print(f"  Start State: {start_state}")
         for i, (from_state, method_call, to_state) in enumerate(trace):
@@ -466,7 +489,7 @@ def generate_html_report(generated_pngs, output_dir, input_basename):
         script_dir = os.path.dirname(os.path.realpath(__file__))
         model_image_src = os.path.join(script_dir, MODEL_IMAGE_NAME)
         if not os.path.exists(model_image_src):
-             model_image_src = os.path.join(script_dir, "..", MODEL_IMAGE_NAME)
+            model_image_src = os.path.join(script_dir, "..", MODEL_IMAGE_NAME)
 
         if os.path.exists(model_image_src):
             shutil.copy(model_image_src, model_image_path_dest)
@@ -477,7 +500,7 @@ def generate_html_report(generated_pngs, output_dir, input_basename):
                     <div class="p-4 bg-white"><img src="{MODEL_IMAGE_NAME}" alt="Correct FSM Behavior Model" class="w-full"></div>
                 </div>"""
         else:
-             raise FileNotFoundError 
+            raise FileNotFoundError 
     except FileNotFoundError:
         print(f"  - {YELLOW}WARNING:{ENDC} '{MODEL_IMAGE_NAME}' not found in script directory or parent directory.")
         model_html_content = f"""<div class="rounded-lg shadow-md bg-red-100 text-red-800 p-4 mb-12"><h2 class="text-2xl font-semibold mb-2 text-red-900">Correct Behavior Model Reference</h2><p><b>{RED}Error:{ENDC}</b> '{MODEL_IMAGE_NAME}' not found.</p></div>"""
@@ -491,7 +514,7 @@ def generate_html_report(generated_pngs, output_dir, input_basename):
     elif not generated_pngs:
         print("  No PNG files were generated, but reference model found. Generating HTML report.")
     elif not model_html_content:
-         print("  PNG files generated, but reference model not found. Generating HTML report.")
+        print("  PNG files generated, but reference model not found. Generating HTML report.")
 
     base_name, _ = os.path.splitext(input_basename)
     output_filename = f"{base_name}_fsm_report.html"
@@ -532,7 +555,7 @@ def generate_html_report(generated_pngs, output_dir, input_basename):
                         </span>
                     </div>
                     <div class="p-4 bg-white">
-                        <img src="{png_file}" alt="FSM Diagram for {app_name}" class="w-full">
+                        <<img src="{png_file}" alt="FSM Diagram for {app_name}" class="w-full">
                     </div>
                 </div>
     """
@@ -626,18 +649,18 @@ def generate_fsm_png_report(app_fsm_traces, output_dir, input_basename):
                 print(f"    {GREEN}Success!{ENDC} Saved to {png_filename}")
                 generated_pngs.append((png_filename, app_name, status, status_color))
             except graphviz.backend.execute.ExecutableNotFound:
-                 print(f"  {YELLOW}ERROR:{ENDC} 'dot' executable not found (part of Graphviz).")
-                 break
+                print(f"  {YELLOW}ERROR:{ENDC} 'dot' executable not found (part of Graphviz).")
+                break
             except Exception as render_err:
-                 print(f"    {YELLOW}WARNING:{ENDC} Graphviz render failed for {app_name}: {render_err!r}")
+                print(f"    {YELLOW}WARNING:{ENDC} Graphviz render failed for {app_name}: {render_err!r}")
 
         except Exception as e:
             print(f"\n  {YELLOW}--- WARNING ---{ENDC}")
             print(f"  Could not generate diagram for {app_name}. Error: {e!r}")
             if isinstance(e, graphviz.backend.execute.ExecutableNotFound) or \
                ("failed to execute" in str(e)) or ("No such file" in str(e)):
-                 print(f"  {YELLOW}Error: Graphviz executable not found.{ENDC}")
-                 break
+                print(f"  {YELLOW}Error: Graphviz executable not found.{ENDC}")
+                break
     # --- Generate HTML report ---
     generate_html_report(generated_pngs, output_dir, input_basename)
     print(f"--- End of Visualization ---")
@@ -648,11 +671,13 @@ def extract_debug_logs():
     """Orchestrates the log extraction process."""
     try:
         input_path, input_basename = get_log_file_choice()
-    except SystemExit: return
+    except SystemExit:
+        return
 
     print(f"\nStarting log extraction...")
     print(f"  Input file: {input_path}")
-    if ENABLE_COLOR: print(f"  {GREEN}Highlighting enabled.{ENDC} ...")
+    if ENABLE_COLOR:
+        print(f"  {GREEN}Highlighting enabled.{ENDC} ...")
 
     try:
         # --- Get valid base folder names ---
@@ -692,7 +717,8 @@ def extract_debug_logs():
             found_full_packages, 
             app_fsm_traces, 
             app_fsm_current_state,
-            full_pkg_to_base_pkg  # --- Pass the map
+            full_pkg_to_base_pkg,  # --- Pass the map
+            valid_folder_names
         )
         # ----------------------------------------------------
 
@@ -702,7 +728,6 @@ def extract_debug_logs():
             print("\nFiltering FSM traces against valid APK folder names...")
             removed_count = 0
             for app_key, trace in app_fsm_traces.items():
-                # app_key is now the base folder name (or a non-matching full name)
                 if app_key in valid_folder_names:
                     folder_filtered_traces[app_key] = trace
                 else:
@@ -713,8 +738,8 @@ def extract_debug_logs():
             else:
                 print(f"  All identified traces matched a valid folder.")
         else:
-             print(f"  {YELLOW}WARNING:{ENDC} No valid app folders found, skipping folder filtering.")
-             folder_filtered_traces = app_fsm_traces
+            print(f"  {YELLOW}WARNING:{ENDC} No valid app folders found, skipping folder filtering.")
+            folder_filtered_traces = app_fsm_traces
         # --- END FILTER 1 BLOCK ---
 
         # --- START: Filter 2 ---
@@ -723,7 +748,6 @@ def extract_debug_logs():
         print("\nFiltering traces to remove simple 2-part packages...")
         removed_count_2 = 0
         for app_key, trace in folder_filtered_traces.items():
-            # Split the package name by '.' and count the parts
             if len(app_key.split('.')) == 2:
                 removed_count_2 += 1
             else:
@@ -734,44 +758,34 @@ def extract_debug_logs():
         else:
             print("  No traces matched the 2-part package pattern.")
         
-        app_fsm_traces = final_filtered_traces # Use this final filtered dict
+        app_fsm_traces = final_filtered_traces  # Use this final filtered dict
         # --- END FILTER 2 BLOCK ---
-
 
         print(f"\nExtraction complete.")
         print(f"  Processed {total_lines} total lines.")
         print(f"  Found {debug_lines_found} matching debug lines (containing '{KEYWORD_FILTER}' and '{STRIP_BEFORE_KEYWORD}').")
 
-        # --- SECTION REMOVED AS REQUESTED ---
-        # if full_pkg_to_base_pkg:
-        #     print(f"\n--- Identified App Packages (Full Names, Mapped to Folders) ---")
-        #     # We only want to show packages that were successfully mapped
-        #     for pkg in sorted(list(full_pkg_to_base_pkg.keys())): 
-        #         print(f"  {pkg} (Base: {full_pkg_to_base_pkg[pkg]})")
-        #     print(f"--- End of Packages ---")
-        # else: print(f"\n--- No non-standard app packages were matched to folders. ---")
-        # ------------------------------------------
-        
         # --- Print packages that *passed all filters* ---
         if app_fsm_traces:
-             print(f"\n--- Packages Passing All Filters ---")
-             for pkg in sorted(list(app_fsm_traces.keys())):
-                 print(f"  {GREEN}{pkg}{ENDC}")
-             print(f"--- End of Filtered Packages ---")
+            print(f"\n--- Packages Passing All Filters ---")
+            for pkg in sorted(list(app_fsm_traces.keys())):
+                print(f"  {GREEN}{pkg}{ENDC}")
+            print(f"--- End of Filtered Packages ---")
         else:
-             print(f"\n--- No packages passed all filters. ---")
-        # ---------------------------------------------------
+            print(f"\n--- No packages passed all filters. ---")
 
         # Use the final filtered traces for reports
         print_fsm_reports(app_fsm_traces)
         generate_fsm_png_report(app_fsm_traces, LOG_DIR, input_basename)
 
-    except FileNotFoundError: print(f"\n--- ERROR ---\nFile not found: {input_path}")
-    except Exception as e: print(f"\n--- ERROR ---\nUnexpected error: {type(e)}\nDetails: {e!r}")
+    except FileNotFoundError:
+        print(f"\n--- ERROR ---\nFile not found: {input_path}")
+    except Exception as e:
+        print(f"\n--- ERROR ---\nUnexpected error: {type(e)}\nDetails: {e!r}")
 
 if __name__ == "__main__":
     if not os.path.exists(LOG_DIR):
         os.makedirs(LOG_DIR); print(f"Created directory: {LOG_DIR}")
-    if not ENABLE_COLOR: print("(Note: Color highlighting disabled.)")
+    if not ENABLE_COLOR:
+        print("(Note: Color highlighting disabled.)")
     extract_debug_logs()
-
