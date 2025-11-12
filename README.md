@@ -15,4 +15,5 @@ Next, run `Clean_Directories.py` to remove all folders and files in the sootOutp
 # Instrumenting and generating models
 First, run `Instrument_APK_Files_In_Soot_Output_Injector_APK_Files_Directory.py` which will generate the logs.
 
-Next, run `Analyze_And_Construct_FSM_Model_From_Log_File.py` to generate the models based on the log details.
+<!-- Next, run `Analyze_And_Construct_FSM_Model_From_Log_File.py` to generate the models based on the log details. -->
+Next, run `python3 Analyze_And_Construct_FSM_Model_From_Log_File_Test.py --class-filter "com.google.android.gms.ads*" --call-filter attachInfo,onResume,onPause,build,initialize,onResume,onDestroy   --call-preset admob   --show-sequence --emit-fsm-html` to generate the models based on the log details.
