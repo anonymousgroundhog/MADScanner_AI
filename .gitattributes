@@ -1,0 +1,3 @@
+Python/logcat_logs/logcat_2025-11-20_07-55-16.log filter=lfs diff=lfs merge=lfs -text
+Python/logcat_logs/logcat_2025-11-20_08-28-30.log filter=lfs diff=lfs merge=lfs -text
+Python/logcat_logs/logcat_2025-11-19_17-35-48.log filter=lfs diff=lfs merge=lfs -text
