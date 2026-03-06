@@ -17,3 +17,14 @@ First, run `Instrument_APK_Files_In_Soot_Output_Injector_APK_Files_Directory.py`
 
 <!-- Next, run `Analyze_And_Construct_FSM_Model_From_Log_File.py` to generate the models based on the log details. -->
 Next, run `python3 Analyze_And_Construct_FSM_Model_From_Log_File_Test.py --class-filter "com.google.android.gms.ads*" --call-filter attachInfo,onResume,onPause,build,initialize,onResume,onDestroy   --call-preset admob   --show-sequence --emit-fsm-html` to generate the models based on the log details.
+
+# Blockchain
+
+Install docker and virtualbox. Then run the following:
+```shell
+sudo docker run -p 8545:8545 trufflesuite/ganache
+```
+
+Compile the smart contract located under the folder smart_contract and deploy using remix IDE
+
+In the `Web3.py`` script under the `Python` folder. Note, be sure to change the contract address before running.
