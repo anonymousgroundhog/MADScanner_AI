@@ -7,7 +7,7 @@ from web3 import Web3
 # --- 1. CONFIGURATION ---
 LOG_DIR = "logcat_logs"
 RPC_URL = "http://127.0.0.1:8545" 
-CONTRACT_ADDRESS = "0x5E2fEd8E1B5A440cBFc56E237d53434EaBd4C87a"
+CONTRACT_ADDRESS = "0x38B184DE2f69a42Ce9b73179cD7155803968004A"
 
 # Methods defined in the FSM Model (Triggers)
 VALID_FSM_METHODS = {
