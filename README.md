@@ -15,8 +15,10 @@ Next, run `Clean_Directories.py` to remove all folders and files in the sootOutp
 # Instrumenting and generating models
 First, run `Instrument_APK_Files_In_Soot_Output_Injector_APK_Files_Directory.py` which will generate the logs.
 
+## Running AI Studio Visualizer
+Follow the instructions at: [fsm-visualizer](fsm-visualizer)
 
-# Blockchain
+## Blockchain
 
 Install docker and virtualbox. Then run the following:
 ```shell
