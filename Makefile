@@ -7,12 +7,12 @@ APK_DIR = APK_Files_To_Analyze
 # OS Detection
 OS := $(shell uname -s)
 
-.PHONY: all install clean system-deps node-deps
+.PHONY: all install clean system-deps node-deps java-deps
 
 # Main setup sequence
-all: system-deps node-deps install
+all: system-deps java-deps node-deps install
 
-# 1. Install System-Level Dependencies
+# 1. Install System-Level Dependencies (Graphviz & Curl)
 system-deps:
 	@echo "Checking System Dependencies..."
 ifeq ($(OS), Darwin)
@@ -24,7 +24,16 @@ else ifeq ($(OS), Linux)
 	fi
 endif
 
-# 2. Install Node.js and Appium Server
+# 2. Ensure Latest Java is installed
+java-deps:
+	@echo "Checking Java Installation..."
+ifeq ($(OS), Darwin)
+	@brew install openjdk || brew upgrade openjdk
+else ifeq ($(OS), Linux)
+	@sudo apt-get install -y default-jdk
+endif
+
+# 3. Install Node.js and Appium Server
 node-deps:
 	@echo "Checking Node.js for Appium Server..."
 	@which node >/dev/null 2>&1 || ( \
@@ -33,20 +42,20 @@ node-deps:
 		else curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt-get install -y nodejs; fi \
 	)
 	@sudo npm install -g appium
-	@appium driver install chromium
+	@appium driver install chromium 
 
-# 3. Install Python Libraries and Create Directory
+# 4. Install Python Libraries and Create APK Directory
 install:
 	@echo "Installing Python libraries..."
 	$(PIP) install --upgrade pip
-	$(PIP) install $(EXTERNAL_LIBS)
+	$(PIP) install $(EXTERNAL_LIBS) 
 	@echo "Ensuring analysis directory exists..."
 	mkdir -p $(APK_DIR)
 	@echo "--- SETUP COMPLETE ---"
-	@echo "Directory created: $(APK_DIR)"
+	@echo "Directory ready: $(APK_DIR)"
 
-# 4. Clean up environment
+# 5. Clean up environment
 clean:
 	@echo "Cleaning up..."
 	rm -rf venv
-	rm -rf '7]' '.
+	rm -rf '7]' '`) has been removed from the code blocks to prevent `make` from crashing with the "multiple target patterns" error.
