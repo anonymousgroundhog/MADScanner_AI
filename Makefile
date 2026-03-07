@@ -1,17 +1,18 @@
 # Variables
 PYTHON = python3
-VENV = venv
-BIN = $(VENV)/bin
+PIP = pip3
 EXTERNAL_LIBS = appium-python-client graphviz selenium web3
+APK_DIR = APK_Files_To_Analyze
 
 # OS Detection
 OS := $(shell uname -s)
 
-.PHONY: all venv install clean system-deps node-deps
+.PHONY: all install clean system-deps node-deps
 
-all: system-deps node-deps venv install
+# Main setup sequence
+all: system-deps node-deps install
 
-# 1. Install System-Level Dependencies (Graphviz)
+# 1. Install System-Level Dependencies
 system-deps:
 	@echo "Checking System Dependencies..."
 ifeq ($(OS), Darwin)
@@ -19,7 +20,7 @@ ifeq ($(OS), Darwin)
 	@brew list graphviz >/dev/null 2>&1 || brew install graphviz
 else ifeq ($(OS), Linux)
 	@if [ -f /etc/debian_version ]; then \
-		sudo apt-get update && sudo apt-get install -y graphviz python3-venv python3-pip curl; \
+		sudo apt-get update && sudo apt-get install -y graphviz python3-pip curl; \
 	fi
 endif
 
@@ -31,23 +32,21 @@ node-deps:
 		if [ "$(OS)" = "Darwin" ]; then brew install node; \
 		else curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt-get install -y nodejs; fi \
 	)
-	@echo "Installing Appium Server globally..."
 	@sudo npm install -g appium
-	@appium driver install chromium  # Required for Selenium/Web tests
+	@appium driver install chromium
 
-# 3. Create the Python Virtual Environment
-venv:
-	@test -d $(VENV) || $(PYTHON) -m venv $(VENV)
-
-# 4. Install Python Libraries
-install: venv
+# 3. Install Python Libraries and Create Directory
+install:
 	@echo "Installing Python libraries..."
-	@$(BIN)/pip install --upgrade pip
-	@$(BIN)/pip install $(EXTERNAL_LIBS)
+	$(PIP) install --upgrade pip
+	$(PIP) install $(EXTERNAL_LIBS)
+	@echo "Ensuring analysis directory exists..."
+	mkdir -p $(APK_DIR)
 	@echo "--- SETUP COMPLETE ---"
-	@echo "To start Appium Server: appium"
-	@echo "To run your script: ./$(BIN)/python your_script.py"
+	@echo "Directory created: $(APK_DIR)"
 
+# 4. Clean up environment
 clean:
-	rm -rf $(VENV)
-	@echo "Environment cleaned."
+	@echo "Cleaning up..."
+	rm -rf venv
+	rm -rf '7]' '.
