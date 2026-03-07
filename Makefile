@@ -48,7 +48,7 @@ node-deps:
 install:
 	@echo "Installing Python libraries..."
 	$(PIP) install --upgrade pip
-	$(PIP) install $(EXTERNAL_LIBS) 
+	$(PIP) install $(EXTERNAL_LIBS)
 	@echo "Ensuring analysis directory exists..."
 	mkdir -p $(APK_DIR)
 	@echo "--- SETUP COMPLETE ---"
