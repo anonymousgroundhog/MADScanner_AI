@@ -1,3 +1,9 @@
+APK_Files_To_Analyze/**/*.apk
+APK_Files_To_Analyze/**/*.ini
+Python/logcat_logs/*.png
+Python/logcat_logs/*.html
+Python/fsm_out/*.png
+Python/fsm_out/*.html
 *.apk
 *.idsig
 *.class

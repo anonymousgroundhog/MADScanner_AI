@@ -1,0 +1,5 @@
+{
+  "name": "Android App FSM Visualizer",
+  "description": "An application to visualize the behavior of an Android application as a Finite State Machine (FSM) by analyzing its log traces. Upload a log file to see the app's state transitions animated on the graph.",
+  "requestFramePermissions": []
+}
