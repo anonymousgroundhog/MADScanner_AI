@@ -86,16 +86,12 @@ def cleanup_directories(root_dir):
 
 def find_matching_apks(source_dir, search_dir):
     """
-    Iterates through subdirectories in source_dir, finds a matching directory
-    in the search_dir tree, and copies files starting with 'split_config' 
-    from the matched directory back to the source subdirectory.
-
-    MODIFIED: Now strips category prefixes (e.g., "Games_") from
-    directory names before searching.
+    Walks source_dir at any depth to find directories containing 'signed-base.apk',
+    then locates the matching package directory anywhere in search_dir and copies
+    all split_config APKs from it into the source subdirectory.
     """
     print(f"--- Searching for matching APKs and copying split_config files ---\n")
 
-    # Check if the source and search directories exist
     if not os.path.isdir(source_dir):
         print(f"Error: The source directory '{source_dir}' does not exist.")
         return
@@ -103,53 +99,38 @@ def find_matching_apks(source_dir, search_dir):
         print(f"Error: The search directory '{search_dir}' does not exist.")
         return
 
-    # Iterate through the items in the source directory
-    for item in os.listdir(source_dir):
-        source_item_path = os.path.join(source_dir, item)
-        
-        # Check if the item is a directory
-        if os.path.isdir(source_item_path):
-            subdirectory_name = item
-            
-            # --- NEW: Check for and strip prefix ---
-            search_name = subdirectory_name
-            for prefix in CATEGORY_PREFIXES:
-                if subdirectory_name.startswith(prefix):
-                    # Strip the prefix to get the real app name
-                    search_name = subdirectory_name[len(prefix):]
-                    print(f"Checking for: {subdirectory_name} (Stripped to: {search_name})")
-                    break # Stop after finding the first match
-            
-            if search_name == subdirectory_name:
-                 print(f"Checking for: {subdirectory_name} (No prefix found)")
-            # -------------------------------------
-            
-            match_found = False
-            # Walk through the entire directory tree of the search directory
-            for root, dirnames, _ in os.walk(search_dir):
-                # --- MODIFIED: Use search_name ---
-                if search_name in dirnames:
-                    target_path = os.path.join(root, search_name)
-                    # ---------------------------
-                    print(f"  - Match found: {target_path}")
-                    match_found = True
+    # Build a lookup: package_name -> directory path, by walking search_dir once
+    search_index = {}
+    for root, dirnames, files in os.walk(search_dir):
+        if "base.apk" in files:
+            pkg = os.path.basename(root)
+            search_index[pkg] = root
 
-                    # Copy files starting with "split_config" from the target to the source
-                    for filename in os.listdir(target_path):
-                        if filename.startswith("split_config"):
-                            source_file = os.path.join(target_path, filename)
-                            destination_file = os.path.join(source_item_path, filename)
-                            try:
-                                shutil.copy(source_file, destination_file)
-                                print(f"    - Copied '{filename}' to '{source_item_path}'")
-                            except shutil.Error as e:
-                                print(f"    - Error copying '{filename}': {e}")
-                    
-                    print() # Add a blank line for readability
-                    break  # Exit the os.walk loop for this item as we found a match
-            
-            if not match_found:
-                print(f"  - No match found for '{search_name}' within the subdirectories of {search_dir}\n")
+    # Walk source_dir to find every directory that contains a signed-base.apk
+    for root, dirnames, files in os.walk(source_dir):
+        if "signed-base.apk" not in files:
+            continue
+
+        pkg = os.path.basename(root)
+        print(f"Checking for match: {pkg}")
+
+        if pkg not in search_index:
+            print(f"  - No match found for '{pkg}' in {search_dir}\n")
+            continue
+
+        target_path = search_index[pkg]
+        print(f"  - Match found: {target_path}")
+
+        for filename in os.listdir(target_path):
+            if filename.startswith("split_config") and filename.endswith(".apk"):
+                src_file = os.path.join(target_path, filename)
+                dst_file = os.path.join(root, filename)
+                try:
+                    shutil.copy(src_file, dst_file)
+                    print(f"    - Copied '{filename}' to '{root}'")
+                except shutil.Error as e:
+                    print(f"    - Error copying '{filename}': {e}")
+        print()
 
 def process_apks(root_dir):
     """
@@ -469,8 +450,10 @@ def check_for_play_store_popup(driver):
 
 def run_appium_tests(root_dir):
     """
-    Installs and runs Appium tests on all processed APKs in the root directory.
-    MODIFIED: Now stops test immediately if a "Get this app from Play" popup is found.
+    Walks root_dir at any depth to find directories containing 'signed-base.apk',
+    locates matching split_config APKs from the original APK_Files_To_Analyze tree,
+    verifies the signed APK and original base.apk share the same package name,
+    then runs adb install-multiple and Appium tests.
     """
     print("\n--- Starting Automated Ad-Clicking Test ---")
 
@@ -478,41 +461,70 @@ def run_appium_tests(root_dir):
         print(f"Error: Instrumented APKs directory not found at '{root_dir}'.", file=sys.stderr)
         sys.exit(1)
 
-    # Iterate through each app-specific subdirectory
-    for app_dir_name in os.listdir(root_dir):
-        app_dir_path = os.path.join(root_dir, app_dir_name)
-        
-        if not os.path.isdir(app_dir_path):
+    # Build a lookup of package_name -> original app dir from APK_Files_To_Analyze
+    original_apk_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "APK_Files_To_Analyze")
+    original_index = {}
+    if os.path.isdir(original_apk_dir):
+        for orig_root, _, orig_files in os.walk(original_apk_dir):
+            if "base.apk" in orig_files:
+                pkg = os.path.basename(orig_root)
+                original_index[pkg] = orig_root
+    else:
+        print(f"  Warning: original APK directory not found at '{original_apk_dir}'. Split config matching will be skipped.", file=sys.stderr)
+
+    # Walk root_dir to find every directory containing a signed-base.apk
+    for app_dir_path, _, files in os.walk(root_dir):
+        if "signed-base.apk" not in files:
             continue
 
+        app_dir_name = os.path.basename(app_dir_path)
         print(f"\n--- Processing Application: {app_dir_name} ---")
 
-        # Find the base APK to extract info for Appium
-        base_apk_path = os.path.join(app_dir_path, "signed-base.apk")
-        if not os.path.exists(base_apk_path):
-            print(f"  - 'signed-base.apk' not found in '{app_dir_name}'. Cannot determine app activity. Skipping.", file=sys.stderr)
-            continue
+        signed_base_apk = os.path.join(app_dir_path, "signed-base.apk")
 
-        apk_info = get_apk_info(base_apk_path)
+        # Extract package info from the signed APK
+        apk_info = get_apk_info(signed_base_apk)
         if not apk_info:
             continue
-        
         app_package, app_activity = apk_info
 
-        # Install all 'signed*.apk' files from the subdirectory
-        print(f"  - Attempting to install multiple APKs for {app_package}")
-        apk_paths = glob.glob(os.path.join(app_dir_path, "signed*.apk"))
+        # Verify signed APK package name matches original base.apk package name
+        if app_dir_name in original_index:
+            original_base_apk = os.path.join(original_index[app_dir_name], "base.apk")
+            original_info = get_apk_info(original_base_apk)
+            if original_info:
+                original_package = original_info[0]
+                if original_package != app_package:
+                    print(f"  ⚠️ Package mismatch: signed APK has '{app_package}' but original base.apk has '{original_package}'. Skipping.", file=sys.stderr)
+                    continue
+                print(f"  ✓ Package names match: '{app_package}'")
+            else:
+                print(f"  ⚠️ Could not verify original base.apk for '{app_dir_name}'. Proceeding without verification.", file=sys.stderr)
+        else:
+            print(f"  ⚠️ No original APK directory found for '{app_dir_name}'. Skipping package verification.", file=sys.stderr)
 
-        if not apk_paths:
-            print(f"  - No 'signed*.apk' files found for installation in {app_dir_path}.", file=sys.stderr)
-            continue
+        # Collect APKs to install: signed-base.apk + all signed split_config APKs from this dir
+        apk_paths = [signed_base_apk]
+        if app_dir_name in original_index:
+            for fname in os.listdir(original_index[app_dir_name]):
+                if fname.startswith("split_config") and fname.endswith(".apk"):
+                    apk_paths.append(os.path.join(original_index[app_dir_name], fname))
+
+        # Also pick up any signed split_config APKs already copied into the output dir
+        for fname in files:
+            fpath = os.path.join(app_dir_path, fname)
+            if fname.startswith("signed_split_config") and fname.endswith(".apk") and fpath not in apk_paths:
+                apk_paths.append(fpath)
+
+        print(f"  - Installing {len(apk_paths)} APK(s) for {app_package}:")
+        for p in apk_paths:
+            print(f"      {p}")
 
         command = ["adb", "install-multiple"] + apk_paths
         try:
             run_command(command, check_output=True, error_message=f"Error installing APKs for {app_package}")
             print(f"    - Installation successful for {app_package}.")
         except Exception:
-            # Error is printed by run_command
             print(f"  - Installation failed for {app_package}. Skipping Appium test.", file=sys.stderr)
             continue
 
