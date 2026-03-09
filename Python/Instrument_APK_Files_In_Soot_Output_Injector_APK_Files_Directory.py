@@ -520,7 +520,7 @@ def run_appium_tests(root_dir):
         for p in apk_paths:
             print(f"      {p}")
 
-        command = ["adb", "install-multiple"] + apk_paths
+        command = ["adb", "install-multiple", "-r"] + apk_paths
         try:
             run_command(command, check_output=True, error_message=f"Error installing APKs for {app_package}")
             print(f"    - Installation successful for {app_package}.")
