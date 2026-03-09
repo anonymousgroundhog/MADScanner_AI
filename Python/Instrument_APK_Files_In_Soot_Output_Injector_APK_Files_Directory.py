@@ -7,6 +7,7 @@ import sys
 import time
 import re
 import glob
+import argparse
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
 from selenium.webdriver.common.by import By
@@ -448,10 +449,10 @@ def check_for_play_store_popup(driver):
     return False
 # --------------------------------------------------
 
-def run_appium_tests(root_dir):
+def run_appium_tests(root_dir, original_apk_dir=None):
     """
     Walks root_dir at any depth to find directories containing 'signed-base.apk',
-    locates matching split_config APKs from the original APK_Files_To_Analyze tree,
+    locates matching split_config APKs from the original APK directory,
     verifies the signed APK and original base.apk share the same package name,
     then runs adb install-multiple and Appium tests.
     """
@@ -461,8 +462,9 @@ def run_appium_tests(root_dir):
         print(f"Error: Instrumented APKs directory not found at '{root_dir}'.", file=sys.stderr)
         sys.exit(1)
 
-    # Build a lookup of package_name -> original app dir from APK_Files_To_Analyze
-    original_apk_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "APK_Files_To_Analyze")
+    # Build a lookup of package_name -> original app dir
+    if original_apk_dir is None:
+        original_apk_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "APK_Files_To_Analyze")
     original_index = {}
     if os.path.isdir(original_apk_dir):
         for orig_root, _, orig_files in os.walk(original_apk_dir):
@@ -503,17 +505,13 @@ def run_appium_tests(root_dir):
         else:
             print(f"  ⚠️ No original APK directory found for '{app_dir_name}'. Skipping package verification.", file=sys.stderr)
 
-        # Collect APKs to install: signed-base.apk + all signed split_config APKs from this dir
+        # Collect APKs to install: signed-base.apk + only re-signed split_config APKs from output dir.
+        # Do NOT mix in unsigned originals from APK_Files_To_Analyze — inconsistent signatures
+        # will cause INSTALL_FAILED_INVALID_APK.
         apk_paths = [signed_base_apk]
-        if app_dir_name in original_index:
-            for fname in os.listdir(original_index[app_dir_name]):
-                if fname.startswith("split_config") and fname.endswith(".apk"):
-                    apk_paths.append(os.path.join(original_index[app_dir_name], fname))
-
-        # Also pick up any signed split_config APKs already copied into the output dir
         for fname in files:
             fpath = os.path.join(app_dir_path, fname)
-            if fname.startswith("signed_split_config") and fname.endswith(".apk") and fpath not in apk_paths:
+            if fname.startswith("signed_split_config") and fname.endswith(".apk"):
                 apk_paths.append(fpath)
 
         print(f"  - Installing {len(apk_paths)} APK(s) for {app_package}:")
@@ -626,17 +624,29 @@ def stop_logcat_capture():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Instrument and test injected APK files.")
+    parser.add_argument(
+        "--apk-dir",
+        default=None,
+        help="Path to the directory containing original APKs to analyze. "
+             "Defaults to '../APK_Files_To_Analyze' relative to this script.",
+    )
+    args = parser.parse_args()
+
     # Specify the directory with injected APKs
     injected_apk_dir = "Soot_Output_Injector_APK_Files"
-    # Specify the directory with original APKs to analyze
-    original_apk_dir = "../APK_Files_To_Analyze"
-    
-    # You can uncomment any of the lines below to run the desired function
-    
+
+    # Use the user-supplied path if provided, otherwise fall back to the default.
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if args.apk_dir:
+        original_apk_dir = os.path.abspath(args.apk_dir)
+    else:
+        original_apk_dir = os.path.join(script_dir, "..", "APK_Files_To_Analyze")
+
     cleanup_directories(injected_apk_dir)
     find_matching_apks(injected_apk_dir, original_apk_dir)
     process_apks(injected_apk_dir)
     start_logcat_capture()
-    run_appium_tests(injected_apk_dir)
+    run_appium_tests(injected_apk_dir, original_apk_dir)
     stop_logcat_capture()
 

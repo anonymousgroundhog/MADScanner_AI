@@ -2,6 +2,7 @@ import subprocess
 import os
 import sys
 import shutil # For high-level file operations like rmtree
+import argparse
 
 def run_command(command_parts, check_output=False, cwd=None, error_message="Error executing command"):
     """
@@ -45,15 +46,26 @@ def main():
     """
     Main function to orchestrate the LogInjector process for all APK files.
     """
+    parser = argparse.ArgumentParser(description="Inject logging into APK files using Soot.")
+    parser.add_argument(
+        "--apk-dir",
+        default=None,
+        help="Path to the directory containing APKs to analyze. "
+             "Defaults to '../APK_Files_To_Analyze' relative to this script.",
+    )
+    args = parser.parse_args()
+
     # Define the script's directory (where this Python file resides, e.g., 'your_project/Python/')
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
     # Define the parent directory (one level up from the script, e.g., 'your_project/')
     parent_dir = os.path.join(script_dir, "..")
 
-    # Define the base directory for APK files: one level up from the script's location.
-    # This correctly points to 'your_project/APK_Files_To_Analyze/'
-    apk_files_base_dir = os.path.join(parent_dir, "APK_Files_To_Analyze")
+    # Use the user-supplied path if provided, otherwise fall back to the default.
+    if args.apk_dir:
+        apk_files_base_dir = os.path.abspath(args.apk_dir)
+    else:
+        apk_files_base_dir = os.path.join(parent_dir, "APK_Files_To_Analyze")
     
     # Define the final output directory for injected and signed APKs.
     # This remains within the script's directory.
