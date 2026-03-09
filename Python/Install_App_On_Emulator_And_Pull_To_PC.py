@@ -124,6 +124,125 @@ def open_play_store_page(package_name):
         raise
 
 
+# Text fragments that the Play Store displays when an app is not available.
+PLAY_STORE_UNAVAILABLE_STRINGS = [
+    "isn't available",
+    "not available",
+    "item not found",
+    "this app is not available",
+    "not found",
+    "doesn't exist",
+]
+
+
+def load_not_available(not_available_path):
+    """
+    Loads the set of packages recorded as not available on the Play Store.
+
+    Args:
+        not_available_path (str): Path to the not-available log file.
+
+    Returns:
+        set[str]: Set of package name strings.
+    """
+    if not os.path.exists(not_available_path):
+        return set()
+    with open(not_available_path, "r", encoding="utf-8") as f:
+        return {line.strip() for line in f if line.strip() and not line.startswith("#")}
+
+
+def record_not_available(not_available_path, package_name):
+    """
+    Appends a package name to the not-available log file so it is skipped in
+    future runs.
+
+    Args:
+        not_available_path (str): Path to the not-available log file.
+        package_name (str): The package name to record.
+    """
+    with open(not_available_path, "a", encoding="utf-8") as f:
+        f.write(f"{package_name}\n")
+    print(f"  - Recorded '{package_name}' in not-available list: {not_available_path}")
+
+
+def tap_install_button(wait_for_ui=8, max_attempts=3):
+    """
+    Uses uiautomator (via adb shell) to find and tap the Install button on the
+    Play Store page. Retries up to max_attempts times.
+
+    Also detects when the Play Store reports that the app is not available,
+    returning "not_available" immediately so the caller can record it.
+
+    Args:
+        wait_for_ui (int): Seconds to wait for the UI to settle before each attempt.
+        max_attempts (int): Number of tap attempts before giving up.
+
+    Returns:
+        str: One of:
+            "tapped"        — Install button was found and tapped.
+            "not_available" — Play Store indicates the app is not available.
+            "not_found"     — Install button was not found after all attempts.
+    """
+    for attempt in range(1, max_attempts + 1):
+        print(f"  - Looking for Install button (attempt {attempt}/{max_attempts})...")
+        time.sleep(wait_for_ui)
+
+        try:
+            # Dump the current UI hierarchy to a temp file on the device
+            run_adb_command(
+                ["adb", "shell", "uiautomator", "dump", "/sdcard/ui_dump.xml"],
+                check_output=False,
+            )
+
+            dump_xml = run_adb_command(
+                ["adb", "shell", "cat", "/sdcard/ui_dump.xml"],
+                check_output=False,
+            )
+
+            if not dump_xml:
+                print(f"  - UI dump was empty, retrying...", file=sys.stderr)
+                continue
+
+            # Check for Play Store "not available" indicators before looking for Install
+            dump_lower = dump_xml.lower()
+            for unavailable_str in PLAY_STORE_UNAVAILABLE_STRINGS:
+                if unavailable_str in dump_lower:
+                    print(f"  - Play Store shows app is not available (matched: '{unavailable_str}').")
+                    return "not_available"
+
+            # Look for a node with text="Install" and extract its bounds.
+            # Bounds format in uiautomator XML: bounds="[x1,y1][x2,y2]"
+            match = re.search(
+                r'text="Install"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                dump_xml,
+            )
+            if not match:
+                # Some Play Store versions emit attributes in a different order
+                match = re.search(
+                    r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*text="Install"',
+                    dump_xml,
+                )
+
+            if not match:
+                print(f"  - Install button not found in UI dump.", file=sys.stderr)
+                continue
+
+            x1, y1, x2, y2 = int(match.group(1)), int(match.group(2)), int(match.group(3)), int(match.group(4))
+            tap_x = (x1 + x2) // 2
+            tap_y = (y1 + y2) // 2
+
+            print(f"  - Found Install button at bounds [{x1},{y1}][{x2},{y2}]. Tapping ({tap_x},{tap_y})...")
+            run_adb_command(["adb", "shell", "input", "tap", str(tap_x), str(tap_y)])
+            print(f"  - Install button tapped.")
+            return "tapped"
+
+        except Exception as e:
+            print(f"  - Error during Install button tap attempt {attempt}: {e}", file=sys.stderr)
+
+    print(f"  - Could not tap Install button after {max_attempts} attempts.", file=sys.stderr)
+    return "not_found"
+
+
 def is_package_installed(package_name):
     """
     Checks whether a package is currently installed on the emulator.
@@ -244,18 +363,23 @@ def uninstall_package(package_name):
         return False
 
 
-def process_package(package_name, output_base_dir, install_timeout=300):
+def process_package(package_name, output_base_dir, not_available_path, install_timeout=300):
     """
-    Full pipeline for a single package: open Play Store, wait for install,
-    pull APKs, then uninstall.
+    Full pipeline for a single package: check if already pulled, check not-available
+    list, open Play Store, auto-tap Install, wait for install, pull APKs, then uninstall.
 
     Args:
         package_name (str): The package name to process.
         output_base_dir (str): Base directory; APKs are saved under <output_base_dir>/<package_name>/.
-        install_timeout (int): Seconds to wait for the user to install the app.
+        not_available_path (str): Path to the file tracking packages not on Play Store.
+        install_timeout (int): Seconds to wait for installation to complete.
 
     Returns:
-        bool: True if APKs were pulled successfully, False otherwise.
+        str: One of:
+            "downloaded"    — APKs were successfully pulled this run.
+            "skipped"       — Package was already downloaded or already installed.
+            "not_available" — Package is not on the Play Store (recorded to file).
+            "failed"        — An error prevented the download.
     """
     print(f"\n{'='*60}")
     print(f"  Processing: {package_name}")
@@ -263,42 +387,49 @@ def process_package(package_name, output_base_dir, install_timeout=300):
 
     local_package_dir = os.path.join(output_base_dir, package_name)
 
-    # Skip if already downloaded previously
+    # Skip if APKs were already pulled in a previous run
     if os.path.isdir(local_package_dir) and os.listdir(local_package_dir):
-        print(f"  - Output directory already exists and is non-empty. Skipping.")
-        return True
+        print(f"  - Already downloaded (output directory is non-empty). Moving to next app.")
+        return "skipped"
 
-    # If already installed on the device, skip Play Store step
-    already_installed = is_package_installed(package_name)
-    if already_installed:
-        print(f"  - Package is already installed on the emulator. Skipping Play Store step.")
-    else:
-        try:
-            open_play_store_page(package_name)
-        except Exception:
-            print(f"  - Could not open Play Store for '{package_name}'. Skipping.", file=sys.stderr)
-            return False
+    # Skip if the package is already installed on the emulator (e.g. leftover from a
+    # previous interrupted run). Move on so the limit is filled by a fresh app.
+    if is_package_installed(package_name):
+        print(f"  - Package is already installed on the emulator. Moving to next app.")
+        return "skipped"
 
-        print(
-            f"\n  ACTION REQUIRED: Please install '{package_name}' from the Play Store on the emulator.\n"
-            f"  The script will automatically continue once the installation is detected.\n"
-        )
+    # Open the Play Store app page
+    try:
+        open_play_store_page(package_name)
+    except Exception:
+        print(f"  - Could not open Play Store for '{package_name}'. Skipping.", file=sys.stderr)
+        return "failed"
 
-        installed = wait_for_installation(package_name, timeout=install_timeout)
-        if not installed:
-            print(f"  - Skipping '{package_name}' — not installed within timeout.", file=sys.stderr)
-            return False
+    # Auto-tap the Install button (also detects "not available" pages)
+    tap_result = tap_install_button()
+    if tap_result == "not_available":
+        print(f"  - '{package_name}' is not available on the Play Store.", file=sys.stderr)
+        record_not_available(not_available_path, package_name)
+        return "not_available"
+    if tap_result != "tapped":
+        print(f"  - Could not tap Install for '{package_name}'. Skipping.", file=sys.stderr)
+        return "failed"
 
-    # Give the system a moment to finish writing APK files
+    # Wait for the package manager to confirm installation
+    installed = wait_for_installation(package_name, timeout=install_timeout)
+    if not installed:
+        print(f"  - '{package_name}' was not installed within {install_timeout}s. Skipping.", file=sys.stderr)
+        return "failed"
+
+    # Give the system a moment to finish writing APK files to disk
     time.sleep(2)
 
     # Pull all APKs (base + splits)
     apk_paths = get_apk_paths(package_name)
     if not apk_paths:
         print(f"  - No APKs to pull for '{package_name}'.", file=sys.stderr)
-        if not already_installed:
-            uninstall_package(package_name)
-        return False
+        uninstall_package(package_name)
+        return "failed"
 
     pulled_count = 0
     for remote_path in apk_paths:
@@ -307,10 +438,10 @@ def process_package(package_name, output_base_dir, install_timeout=300):
 
     print(f"  - Pulled {pulled_count}/{len(apk_paths)} APK(s) for '{package_name}'.")
 
-    # Uninstall after pulling
+    # Uninstall after pulling to keep the emulator clean
     uninstall_package(package_name)
 
-    return pulled_count > 0
+    return "downloaded" if pulled_count > 0 else "failed"
 
 
 def main():
@@ -369,22 +500,52 @@ def main():
         print("No package names found in the CSV. Exiting.", file=sys.stderr)
         sys.exit(1)
 
-    if args.limit is not None:
-        packages = packages[:args.limit]
+    # Not-available log lives alongside the CSV file
+    not_available_path = os.path.join(os.path.dirname(csv_path), "not_available.txt")
 
-    print(f"Found {len(packages)} package(s) to process:\n")
-    for pkg in packages:
-        print(f"  - {pkg}")
-    print()
+    # Load previously recorded unavailable packages and filter them out upfront
+    not_available_set = load_not_available(not_available_path)
+    if not_available_set:
+        before = len(packages)
+        packages = [p for p in packages if p not in not_available_set]
+        filtered = before - len(packages)
+        print(f"  Filtered   : {filtered} package(s) excluded (recorded as not available in {not_available_path})")
 
-    # Process each package
-    success_count = 0
+    total_in_csv = len(packages)
+    limit = args.limit
+    print(f"Found {total_in_csv} package(s) to consider.")
+    if limit is not None:
+        print(f"Will download up to {limit} new app(s), skipping any already present.\n")
+    else:
+        print()
+
+    # Walk the full CSV. Only freshly downloaded apps count toward --limit.
+    # Skipped and not-available apps are passed over so the limit is filled
+    # by genuinely new downloads.
+    downloaded_count = 0
+    skipped_count = 0
+    not_available_count = 0
+    failed_count = 0
+
     for pkg in packages:
-        if process_package(pkg, output_dir, install_timeout=args.timeout):
-            success_count += 1
+        if limit is not None and downloaded_count >= limit:
+            break
+
+        status = process_package(pkg, output_dir, not_available_path, install_timeout=args.timeout)
+        if status == "downloaded":
+            downloaded_count += 1
+        elif status == "skipped":
+            skipped_count += 1
+        elif status == "not_available":
+            not_available_count += 1
+        else:
+            failed_count += 1
 
     print(f"\n--- Finished ---")
-    print(f"Successfully pulled APKs for {success_count}/{len(packages)} package(s).")
+    print(f"  Downloaded    : {downloaded_count}")
+    print(f"  Skipped       : {skipped_count} (already present)")
+    print(f"  Not available : {not_available_count} (recorded to {not_available_path})")
+    print(f"  Failed        : {failed_count}")
     print(f"APKs are saved under: {output_dir}")
 
 
