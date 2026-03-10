@@ -527,9 +527,20 @@ def main():
     not_available_count = 0
     failed_count = 0
 
-    for pkg in packages:
+    total_to_process = min(limit, total_in_csv) if limit is not None else total_in_csv
+
+    for pkg_index, pkg in enumerate(packages, start=1):
         if limit is not None and downloaded_count >= limit:
             break
+
+        apps_remaining = total_to_process - downloaded_count - 1
+        bar_total = total_to_process
+        bar_filled = downloaded_count
+        bar_width = 30
+        filled = int(bar_width * bar_filled / bar_total) if bar_total > 0 else 0
+        bar = "#" * filled + "-" * (bar_width - filled)
+        print(f"\n[{bar}] {downloaded_count}/{total_to_process} downloaded | "
+              f"{apps_remaining} app(s) remaining | package {pkg_index}/{total_in_csv}")
 
         status = process_package(pkg, output_dir, not_available_path, install_timeout=args.timeout)
         if status == "downloaded":

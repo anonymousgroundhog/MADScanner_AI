@@ -810,3 +810,12 @@ com.com_shotstat_livescoring_public_hjgt_app
 org.skyteam
 com.eventpilot.gsaent
 com.gossip.obama.democracy
+io.xrgames.fruitracing
+piproduction.frankthejew
+com.gmail.shellingsoft.holmesquiz
+com.bottlecap.lineandball
+de.sparkasse.wuppertal.smartinvest
+hopangga.rickymartin.lyrics
+com.mc2techservices.pccb
+com.suaidev.onetfruitclassictropicalfruitdec
+com.gmaxstudios.puzzlemaster.dicemerge.match3
